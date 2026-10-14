@@ -4,63 +4,20 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '23 4 * * 1' # weekly full re-scan, catches newly published advisories
+  workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  verify:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # full history for secret scanning
-          persist-credentials: false
-
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24.11.1
-          cache: npm
-
-      # .npmrc sets ignore-scripts=true; npm ci refuses to run if the lockfile drifts
-      - name: Install (lockfile only, no lifecycle scripts)
-        run: npm ci
-
-      - name: Security gates (key leaks, weak RNG, eval, raw HTML)
-        run: bash scripts/security-gates.sh
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Derivation test vectors + unit tests
-        run: npm test
-
-      - name: Offline signing (network namespace disabled)
-        run: |
-          docker run --rm --network none -v "$PWD":/w -w /w node:24.11.1-bookworm-slim \
-            node --test test/offline-sign.test.ts test/tx.test.ts
-
-      - name: npm audit
-        run: npm audit --audit-level=moderate
-
-      - name: Secret scan (gitleaks, full history)
-        run: |
-          docker run --rm -v "$PWD":/repo ghcr.io/gitleaks/gitleaks:v8.30.1 \
-            detect --source /repo --log-opts="--all" --redact --verbose
-
-      - name: Build extension
-        run: npm run build
-
-      - name: Package + checksums
-        run: bash scripts/package.sh
-
-      # Every CI run publishes a downloadable test build (Actions run page → Artifacts).
-      - name: Upload test build
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: akoya-${{ github.sha }}
-          path: |
-            release/*.zip
-            release/*.sha256
-          retention-days: 30
-          if-no-files-found: error
+  security:
+    # Job-level reusable-workflow calls are resolved by GitHub before any step runs, so the
+    # filesystem-state risk behind `self-repository` does not apply; actionlint 1.7.12 rejects `$/`.
+    uses: ./.github/workflows/security.yml # zizmor: ignore[self-repository]
+    permissions:
+      contents: read # checkout + read-only API calls

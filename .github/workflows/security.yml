@@ -1,0 +1,246 @@
+name: security
+
+# The full security gate. Called by ci.yml (every push / PR / weekly) and by release.yml
+# (before anything is published). Every job runs with:
+#   - least-privilege token (contents: read)
+#   - Harden-Runner egress *blocking*: only the hosts listed per job are reachable
+#   - checksum-pinned tool binaries and SHA-pinned actions
+on:
+  workflow_call:
+    outputs:
+      zip-sha256:
+        description: SHA-256 of the extension zip built by the verify job
+        value: ${{ jobs.verify.outputs.zip-sha256 }}
+
+permissions: {}
+
+env:
+  NODE_VERSION: 24.11.1
+
+jobs:
+  workflow-lint:
+    name: workflow-lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout only
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install actionlint 1.7.12 (checksum-pinned)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/actionlint.tgz" https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tgz" -C "$RUNNER_TEMP" actionlint
+
+      - name: actionlint (with shellcheck)
+        run: '"$RUNNER_TEMP/actionlint" -color'
+
+      - name: Install zizmor 1.30.1 (checksum-pinned)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/zizmor.tgz" https://github.com/zizmorcore/zizmor/releases/download/v1.30.1/zizmor-x86_64-unknown-linux-gnu.tar.gz
+          echo "e65324f4430c2717591937edcec90ccbefaf14c174f8ec9415e03ca875b46e1a  $RUNNER_TEMP/zizmor.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/zizmor.tgz" -C "$RUNNER_TEMP" zizmor
+
+      - name: zizmor (pedantic persona, all severities, online audits)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/zizmor" --persona=pedantic --min-severity=informational --format=plain .github/workflows'
+
+  supply-chain:
+    name: supply-chain
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read # checkout only
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            nodejs.org:443
+            registry.npmjs.org:443
+            tuf-repo-cdn.sigstore.dev:443
+            api.osv.dev:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Lockfile / pinning / licence policy
+        run: node scripts/check-supply-chain.mjs
+
+      - name: Install (lockfile only, lifecycle scripts disabled)
+        run: npm ci
+
+      - name: npm audit (fail on any severity)
+        run: npm audit --audit-level=low
+
+      - name: Verify registry signatures and provenance
+        run: npm audit signatures
+
+      - name: Install OSV-Scanner 2.6.0 (checksum-pinned)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/osv-scanner" https://github.com/google/osv-scanner/releases/download/v2.6.0/osv-scanner_linux_amd64
+          echo "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108  $RUNNER_TEMP/osv-scanner" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/osv-scanner"
+
+      - name: OSV-Scanner (second vulnerability source)
+        run: '"$RUNNER_TEMP/osv-scanner" scan source --lockfile package-lock.json'
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout only
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # full history
+          persist-credentials: false
+
+      - name: Install gitleaks 8.30.1 (checksum-pinned)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tgz" https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+
+      - name: Secret scan (all refs, full history)
+        run: '"$RUNNER_TEMP/gitleaks" git --redact --verbose --log-opts="--all" .'
+
+  verify:
+    name: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read # checkout only
+    outputs:
+      zip-sha256: ${{ steps.pkg.outputs.sha256 }}
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            nodejs.org:443
+            registry.npmjs.org:443
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - name: Install (lockfile only, lifecycle scripts disabled)
+        run: npm ci
+
+      - name: Security gates (key leaks, weak RNG, eval, raw HTML)
+        run: bash scripts/security-gates.sh
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Derivation vectors + unit tests
+        run: npm test
+
+      - name: Signing with the network namespace removed
+        # The process gets no network at all; the first command proves it.
+        run: |
+          sudo unshare --net -- bash -c '
+            if curl -sS -m 5 https://registry.npmjs.org >/dev/null 2>&1; then echo "network still reachable" >&2; exit 1; fi
+            "$0" --test test/offline-sign.test.ts test/tx.test.ts
+          ' "$(command -v node)"
+
+      - name: Build
+        run: npm run build
+
+      - name: Audit built extension (manifest policy, CSP, bundle scan)
+        run: node scripts/audit-dist.mjs
+
+      - name: Package + checksum
+        id: pkg
+        run: |
+          bash scripts/package.sh
+          echo "sha256=$(cut -d' ' -f1 release/*.zip.sha256)" >> "$GITHUB_OUTPUT"
+
+      # Every run publishes a downloadable test build (Actions run page → Artifacts).
+      - name: Upload test build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: akoya-${{ github.sha }}
+          path: |
+            release/*.zip
+            release/*.sha256
+          retention-days: 30
+          if-no-files-found: error
+
+  reproducible:
+    name: reproducible
+    needs: verify
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: read # checkout only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - run: npm ci
+      - run: npm run build
+      - run: bash scripts/package.sh
+
+      - name: macOS build must be byte-identical to the Linux build
+        env:
+          LINUX_SHA256: ${{ needs.verify.outputs.zip-sha256 }}
+        run: |
+          mac="$(cut -d' ' -f1 release/*.zip.sha256)"
+          echo "linux=$LINUX_SHA256"
+          echo "macos=$mac"
+          test -n "$LINUX_SHA256" && test "$mac" = "$LINUX_SHA256"

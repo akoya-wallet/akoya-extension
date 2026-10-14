@@ -22,21 +22,22 @@
     "test:vectors": "node --test test/derivation.test.ts",
     "security:gates": "bash scripts/security-gates.sh",
     "package": "npm run build && bash scripts/package.sh",
-    "release": "bash scripts/release.sh"
+    "release": "bash scripts/release.sh",
+    "check:supply-chain": "node scripts/check-supply-chain.mjs",
+    "audit:dist": "node scripts/audit-dist.mjs"
   },
   "dependencies": {
     "@noble/curves": "2.4.0",
     "@noble/hashes": "2.4.0",
+    "@paulmillr/qr": "0.3.0",
     "@scure/base": "2.4.0",
     "@scure/bip32": "2.4.0",
     "@scure/bip39": "2.4.0",
-    "@scure/btc-signer": "2.4.1",
-    "qrcode": "1.5.4"
+    "@scure/btc-signer": "2.4.1"
   },
   "devDependencies": {
     "@types/chrome": "0.3.4",
     "@types/node": "24.19.2",
-    "@types/qrcode": "1.5.5",
     "@types/react": "19.1.17",
     "@types/react-dom": "19.1.11",
     "@vitejs/plugin-react": "5.1.4",

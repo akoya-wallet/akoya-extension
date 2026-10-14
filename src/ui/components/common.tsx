@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import QRCode from 'qrcode';
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import encodeQR from '@paulmillr/qr';
 import { LANGUAGES, useI18n } from '../../i18n/index.tsx';
 import type { Language } from '../../ext/types.ts';
 import { IconBack, IconClose, IconInfo, IconWarn } from './icons.tsx';
@@ -161,34 +161,17 @@ export function FullAddress({ address, hrp }: { address: string; hrp: string }) 
 
 export function QrCode({ text }: { text: string }) {
   const { t } = useI18n();
-  const [src, setSrc] = useState<string>('');
-  useEffect(() => {
-    let alive = true;
-    QRCode.toString(text, { type: 'svg', margin: 0, errorCorrectionLevel: 'M', color: { dark: '#16151b', light: '#ffffff' } })
-      .then(svg => alive && setSrc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`))
-      .catch(() => alive && setSrc(''));
-    return () => {
-      alive = false;
-    };
+  // generated locally (zero-dependency @paulmillr/qr), rendered as an <img>, never injected as HTML
+  const src = useMemo(() => {
+    try {
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(encodeQR(text, 'svg', { ecc: 'medium', border: 0 }))}`;
+    } catch {
+      return '';
+    }
   }, [text]);
   return <div className="qr">{src && <img src={src} alt={t('common.qr_alt')} />}</div>;
 }
 
-export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
-  const [state, setState] = useState<{ data?: T; error?: string; loading: boolean }>({ loading: true });
-  const run = useCallback(() => {
-    setState(s => ({ ...s, loading: true }));
-    fn().then(
-      data => setState({ data, loading: false }),
-      e => setState(s => ({ ...s, error: (e as Error).message, loading: false })),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  useEffect(run, [run]);
-  return { ...state, reload: run };
-}
-
-export const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function LangSelect({ className = '' }: { className?: string }) {
   const { lang, setLang, t } = useI18n();

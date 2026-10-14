@@ -95,6 +95,8 @@ npm run dev
 | `npm test` | derivation vectors, signing, vault, indexer validation, offline signing |
 | `npm run typecheck` | strict TypeScript |
 | `npm run security:gates` | key-leak / weak-RNG / eval / raw-HTML gates |
+| `npm run check:supply-chain` | lockfile provenance, exact pins, install scripts, licences |
+| `npm run audit:dist` | manifest permissions/CSP and bundle scan of `dist/` |
 | `npm run package` | build + `release/akoya-<ver>.zip` + SHA-256 |
 | `npm run release -- X.Y.Z` | bump version, run checks, commit, tag and push → CI publishes the release |
 
@@ -112,7 +114,8 @@ src/ui/        React UI
 test/          vectors use public test phrases only
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR, and [ROADMAP.md](ROADMAP.md) for what's next.
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR, [docs/CI.md](docs/CI.md) for the CI/CD security pipeline,
+and [ROADMAP.md](ROADMAP.md) for what's next.
 
 ## Reproducible builds
 

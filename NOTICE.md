@@ -33,5 +33,6 @@ all rights reserved, and are excluded from the MIT License. See [TRADEMARKS.md](
 |---|---|---|
 | `@noble/curves`, `@noble/hashes` | MIT | secp256k1/Schnorr, SHA-2, HMAC, Argon2id |
 | `@scure/bip32`, `@scure/bip39`, `@scure/base`, `@scure/btc-signer` | MIT | HD keys, mnemonics, bech32m/base58, transaction signing |
-| `react`, `react-dom` | MIT | UI |
-| `qrcode` | MIT | local QR code rendering |
+| `@paulmillr/qr` | MIT OR Apache-2.0 | local QR code rendering (zero dependencies) |
+| `micro-packed` | MIT | binary encoding (dependency of `@scure/btc-signer`) |
+| `react`, `react-dom` | MIT | UI (bundled at build time) |

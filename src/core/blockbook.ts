@@ -5,6 +5,8 @@
 // Everything returned by an indexer is untrusted: each response is validated and size-bounded
 // here and only the validated subset is handed to the rest of the app.
 
+import { WalletError, type ErrorParams } from './errors.ts';
+
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
 export interface BBToken {
@@ -58,10 +60,10 @@ export interface BBStatus {
   chain: string;
 }
 
-export class BlockbookError extends Error {
+export class BlockbookError extends WalletError {
   status: number;
-  constructor(message: string, status = 0) {
-    super(message);
+  constructor(code: string, params: ErrorParams = {}, status = 0) {
+    super(code, params);
     this.name = 'BlockbookError';
     this.status = status;
   }
@@ -70,7 +72,7 @@ export class BlockbookError extends Error {
 // ---- validators -----------------------------------------------------------
 
 const bad = (what: string): never => {
-  throw new BlockbookError(`索引器返回了无效数据（${what}）`);
+  throw new BlockbookError('indexer.invalid_data', { what });
 };
 const obj = (v: unknown, what: string): Record<string, unknown> =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : bad(what);
@@ -117,7 +119,7 @@ export class Blockbook {
   private fetchFn: FetchFn;
   constructor(base: string, fetchFn: FetchFn = (u, i) => fetch(u, i)) {
     const u = new URL(base);
-    if (u.protocol !== 'https:') throw new BlockbookError('索引器地址必须使用 HTTPS');
+    if (u.protocol !== 'https:') throw new BlockbookError('indexer.https_required');
     this.base = u.origin + u.pathname.replace(/\/+$/, '');
     this.fetchFn = fetchFn;
   }
@@ -133,21 +135,21 @@ export class Blockbook {
         signal: AbortSignal.timeout(30_000),
       });
     } catch (e) {
-      throw new BlockbookError(`无法连接索引器：${e instanceof Error ? e.message : String(e)}`);
+      throw new BlockbookError('indexer.unreachable', { detail: e instanceof Error ? e.message : String(e) });
     }
     const text = await res.text();
-    if (text.length > 20_000_000) bad('响应过大');
+    if (text.length > 20_000_000) bad('response too large');
     let body: unknown;
     try {
       body = JSON.parse(text);
     } catch {
-      throw new BlockbookError(`索引器返回了非 JSON 响应 (HTTP ${res.status})`, res.status);
+      throw new BlockbookError('indexer.non_json', { status: res.status }, res.status);
     }
     const err = body && typeof body === 'object' ? (body as { error?: unknown }).error : undefined;
     if (!res.ok || err !== undefined) {
       const msg =
         typeof err === 'string' ? err : err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : `HTTP ${res.status}`;
-      throw new BlockbookError(msg.slice(0, 300), res.status);
+      throw new BlockbookError('indexer.rejected', { detail: msg.slice(0, 300) }, res.status);
     }
     return body;
   }
@@ -215,7 +217,7 @@ export class Blockbook {
   }
 
   async broadcast(hex: string): Promise<string> {
-    if (!/^[0-9a-f]+$/.test(hex)) throw new BlockbookError('invalid tx hex');
+    if (!/^[0-9a-f]+$/.test(hex)) throw new BlockbookError('indexer.invalid_data', { what: 'tx hex' });
     const o = obj(
       await this.req('/api/v2/sendtx/', { method: 'POST', body: hex, headers: { 'Content-Type': 'text/plain' } }),
       'sendtx',

@@ -6,6 +6,7 @@
 
 import { p2tr } from '@scure/btc-signer';
 import { bech32m } from './encoding.ts';
+import { WalletError } from './errors.ts';
 import type { PearlNetwork } from './networks.ts';
 
 export interface DecodedAddress {
@@ -23,18 +24,18 @@ export function taprootAddress(internalPub33: Uint8Array, net: PearlNetwork): { 
 
 export function decodeAddress(addr: string, net: PearlNetwork): DecodedAddress {
   const s = addr.trim();
-  if (s !== s.toLowerCase() && s !== s.toUpperCase()) throw new Error('地址大小写混用');
+  if (s !== s.toLowerCase() && s !== s.toUpperCase()) throw new WalletError('address.mixed_case');
   let dec;
   try {
     dec = bech32m.decode(s.toLowerCase() as `${string}1${string}`, 120);
   } catch {
-    throw new Error('不是有效的 bech32m 地址');
+    throw new WalletError('address.invalid');
   }
-  if (dec.prefix !== net.hrp) throw new Error(`地址前缀应为 ${net.hrp}1…（当前网络 ${net.label}）`);
+  if (dec.prefix !== net.hrp) throw new WalletError('address.wrong_network', { hrp: net.hrp, network: net.label });
   const [version, ...rest] = dec.words;
   const program = bech32m.fromWords(rest);
-  if (version !== 1 && version !== 2) throw new Error(`不支持的见证版本 v${version}`);
-  if (program.length !== 32) throw new Error('见证程序长度必须为 32 字节');
+  if (version !== 1 && version !== 2) throw new WalletError('address.unsupported_version', { version });
+  if (program.length !== 32) throw new WalletError('address.bad_length');
   const script = new Uint8Array(34);
   script[0] = version === 1 ? 0x51 : 0x52; // OP_1 / OP_2
   script[1] = 0x20;

@@ -9,6 +9,7 @@
 
 import { Transaction } from '@scure/btc-signer';
 import { decodeAddress } from './address.ts';
+import { WalletError } from './errors.ts';
 import { MAX_SANE_FEE_PER_VB, MIN_RELAY_FEE_PER_VB, type PearlNetwork } from './networks.ts';
 
 export interface WalletUtxo {
@@ -56,11 +57,11 @@ export function estimateVsize(nIn: number, nOut: number): number {
 
 const feeFor = (vsize: number, rate: number) => BigInt(Math.ceil(vsize * rate));
 
-export class InsufficientFunds extends Error {
+export class InsufficientFunds extends WalletError {
   needed: bigint;
   available: bigint;
   constructor(needed: bigint, available: bigint) {
-    super('余额不足');
+    super('tx.insufficient', { needed: needed.toString(), available: available.toString() });
     this.needed = needed;
     this.available = available;
   }
@@ -68,7 +69,7 @@ export class InsufficientFunds extends Error {
 
 export function planTransaction(utxos: WalletUtxo[], req: PlanRequest, net: PearlNetwork): TxPlan {
   decodeAddress(req.to, net);
-  if (!Number.isFinite(req.feeRate) || req.feeRate > MAX_SANE_FEE_PER_VB) throw new Error(`费率异常（>${MAX_SANE_FEE_PER_VB} grain/vB）`);
+  if (!Number.isFinite(req.feeRate) || req.feeRate > MAX_SANE_FEE_PER_VB) throw new WalletError('tx.fee_rate', { max: MAX_SANE_FEE_PER_VB });
   const feeRate = Math.max(req.feeRate, MIN_RELAY_FEE_PER_VB);
   const pool = utxos
     .filter(u => req.includeUnconfirmed !== false || u.confirmations > 0)
@@ -84,7 +85,7 @@ export function planTransaction(utxos: WalletUtxo[], req: PlanRequest, net: Pear
     return { inputs: pool, to: req.to, amount, change: 0n, fee, vsize, feeRate };
   }
 
-  if (req.amount < DUST_LIMIT) throw new Error(`金额过小，最少 ${DUST_LIMIT} grains`);
+  if (req.amount < DUST_LIMIT) throw new WalletError('tx.dust', { min: DUST_LIMIT.toString() });
 
   const inputs: WalletUtxo[] = [];
   let total = 0n;
@@ -144,7 +145,7 @@ export function signPlan(
       tx.addOutput({ script: changeScript, amount: plan.change });
     }
     keys.forEach((k, i) => {
-      if (!tx.signIdx(k, i)) throw new Error(`无法签名输入 #${i}`);
+      if (!tx.signIdx(k, i)) throw new WalletError('tx.sign_failed', { index: i });
     });
   } finally {
     keys.forEach(k => k.fill(0));

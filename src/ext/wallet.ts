@@ -17,6 +17,7 @@ import {
   seedBytes,
 } from '../core/account.ts';
 import { decodeAddress, isValidAddress } from '../core/address.ts';
+import { WalletError } from '../core/errors.ts';
 import { Blockbook, BlockbookError, parseTokenPath, type BBTx, type BBXpub } from '../core/blockbook.ts';
 import { decryptWallet, encryptWallet, passwordProblem, reencryptWallet, type VaultEntry } from '../core/keystore.ts';
 import { COINBASE_MATURITY, EXTERNAL, INTERNAL, MAX_SANE_FEE_PER_VB, MIN_RELAY_FEE_PER_VB, NETWORKS, type NetworkId, type PearlNetwork } from '../core/networks.ts';
@@ -65,6 +66,7 @@ export async function lastWalletId(): Promise<string | undefined> {
 const DEFAULT_SETTINGS: Settings = {
   indexers: { mainnet: [...NETWORKS.mainnet.blockbook], testnet2: [...NETWORKS.testnet2.blockbook] },
   autoLockMinutes: 15,
+  language: 'en',
 };
 
 export async function getSettings(): Promise<Settings> {
@@ -77,6 +79,7 @@ export async function getSettings(): Promise<Settings> {
       testnet2: clean(s?.indexers?.testnet2, DEFAULT_SETTINGS.indexers.testnet2),
     },
     autoLockMinutes: typeof s?.autoLockMinutes === 'number' ? Math.min(Math.max(s.autoLockMinutes, 1), 240) : 15,
+    language: s?.language === 'zh-CN' ? 'zh-CN' : 'en',
   };
 }
 
@@ -84,7 +87,7 @@ export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
   const next = { ...(await getSettings()), ...patch };
   for (const id of Object.keys(next.indexers) as NetworkId[]) {
     next.indexers[id] = next.indexers[id].map(u => normalizeIndexerUrl(u));
-    if (!next.indexers[id].length) throw new Error('每个网络至少保留一个索引节点');
+    if (!next.indexers[id].length) throw new WalletError('indexer.need_one');
   }
   await localStore.set(K_SETTINGS, next);
   indexerCache.clear();
@@ -96,10 +99,10 @@ export function normalizeIndexerUrl(u: string): string {
   try {
     url = new URL(u.trim());
   } catch {
-    throw new Error('节点地址格式不正确');
+    throw new WalletError('indexer.bad_url');
   }
-  if (url.protocol !== 'https:') throw new Error('节点必须使用 HTTPS');
-  if (url.username || url.password || url.search || url.hash) throw new Error('节点地址不能包含账号、参数或片段');
+  if (url.protocol !== 'https:') throw new WalletError('indexer.https_required');
+  if (url.username || url.password || url.search || url.hash) throw new WalletError('indexer.url_extras');
   return url.origin + url.pathname.replace(/\/+$/, '');
 }
 
@@ -120,36 +123,42 @@ function indexer(network: NetworkId): Promise<Blockbook> {
 
 async function pickIndexer(network: NetworkId): Promise<Blockbook> {
   const net = NETWORKS[network];
-  const errors: string[] = [];
+  const errors: unknown[] = [];
+  const hosts: string[] = [];
   for (const url of (await getSettings()).indexers[network]) {
     try {
       const bb = new Blockbook(url, indexerFetch);
       const st = await bb.status();
       if (st.chain !== net.backendChain) {
-        errors.push(`${url}: 链为 ${st.chain}，期望 ${net.backendChain}`);
+        errors.push(new WalletError('indexer.chain_mismatch', { chain: st.chain, expected: net.backendChain }));
+        hosts.push(new URL(url).host);
         continue;
       }
       return bb;
     } catch (e) {
-      errors.push(`${url}: ${(e as Error).message}`);
+      errors.push(e);
+      hosts.push(new URL(url).host);
     }
   }
-  throw new BlockbookError(`没有可用的索引节点。${errors.join('；')}`);
+  // a single configured node: surface its own (localisable) error
+  if (errors.length === 1) throw errors[0];
+  throw new BlockbookError('indexer.none_available', { detail: hosts.join(', ') });
 }
 
 export async function indexerStatus(network: NetworkId, url: string): Promise<IndexerStatus> {
   try {
     const st = await new Blockbook(url, indexerFetch).status();
-    const ok = st.chain === NETWORKS[network].backendChain;
-    return { ok, url, height: st.bestHeight, chain: st.chain, inSync: st.inSync, error: ok ? undefined : `链不匹配：${st.chain}` };
+    const expected = NETWORKS[network].backendChain;
+    const ok = st.chain === expected;
+    return { ok, url, height: st.bestHeight, chain: st.chain, inSync: st.inSync, error: ok ? undefined : new WalletError('indexer.chain_mismatch', { chain: st.chain, expected }) };
   } catch (e) {
-    return { ok: false, url, error: (e as Error).message };
+    return { ok: false, url, error: e };
   }
 }
 
 export async function explorerUrl(network: NetworkId, kind: 'tx' | 'address', value: string): Promise<string> {
   const ok = kind === 'tx' ? /^[0-9a-f]{64}$/.test(value) : isValidAddress(value, NETWORKS[network]);
-  if (!ok) throw new Error('invalid explorer target');
+  if (!ok) throw new WalletError('explorer.invalid_target');
   const base = (await getSettings()).indexers[network][0];
   return `${base}/${kind}/${value}`;
 }
@@ -199,9 +208,9 @@ async function requireSession(): Promise<Session> {
   return s;
 }
 
-export class LockedError extends Error {
+export class LockedError extends WalletError {
   constructor() {
-    super('钱包已锁定');
+    super('session.locked');
     this.name = 'LockedError';
   }
 }
@@ -261,19 +270,19 @@ export async function previewImport(args: SeedArgs): Promise<ImportPreview> {
     const x = await (await indexer(args.network)).xpub(`tr(${xpub})`, { page: 1, pageSize: 1 });
     out.activity = { txs: x.txs, balance: x.balance, usedAddresses: x.tokens.length };
   } catch (e) {
-    out.activityError = (e as Error).message;
+    out.activityError = e;
   }
   return out;
 }
 
 export async function createWallet(args: SeedArgs & { name: string; password: string }): Promise<SessionInfo> {
   const problem = passwordProblem(args.password);
-  if (problem) throw new Error(problem);
+  if (problem) throw new WalletError(problem);
   const p = parseSeed(args.secret);
-  if (p.kind === 'invalid') throw new Error(p.reason);
+  if (p.kind === 'invalid') throw new WalletError(p.reason.code, p.reason.params);
   const { xpub } = await xpubFor(p.normalized, args.passphrase, args.network, args.mode);
   const vault = await readVault();
-  const name = args.name.trim().slice(0, 32) || `钱包 ${vault.length + 1}`;
+  const name = args.name.trim().slice(0, 32) || `Wallet ${vault.length + 1}`;
   const entry = await encryptWallet({ name, network: args.network, mode: args.mode }, { secret: p.normalized, passphrase: args.passphrase }, args.password);
   await writeVault([...vault, entry]);
   return start(entry, xpub);
@@ -281,7 +290,7 @@ export async function createWallet(args: SeedArgs & { name: string; password: st
 
 async function entryById(id: string): Promise<VaultEntry> {
   const e = (await readVault()).find(x => x.id === id);
-  if (!e) throw new Error('钱包不存在');
+  if (!e) throw new WalletError('wallet.not_found');
   return e;
 }
 
@@ -461,7 +470,11 @@ export async function prepareSend(draft: SendDraft): Promise<SendPreview> {
     plan = planTransaction(c.utxos, { to, amount, feeRate: draft.feeRate, sendMax: draft.sendMax }, net);
   } catch (e) {
     if (e instanceof InsufficientFunds) {
-      throw new Error(`余额不足：需要 ${formatPrl(e.needed)} PRL，可用 ${formatPrl(e.available)} PRL${c.immature > 0n ? `（另有 ${formatPrl(c.immature)} PRL 挖矿奖励未成熟）` : ''}`);
+      throw new WalletError(c.immature > 0n ? 'send.insufficient_immature' : 'send.insufficient', {
+        needed: formatPrl(e.needed),
+        available: formatPrl(e.available),
+        immature: formatPrl(c.immature),
+      });
     }
     throw e;
   }
@@ -498,10 +511,10 @@ export function discardDraft(draftId: string) {
 export async function confirmSend(draftId: string, password: string): Promise<{ txid: string }> {
   const s = await requireSession();
   const d = drafts.get(draftId);
-  if (!d || d.walletId !== s.walletId) throw new Error('交易草稿不存在，请重新发起');
+  if (!d || d.walletId !== s.walletId) throw new WalletError('send.draft_missing');
   if (Date.now() > d.expiresAt) {
     drafts.delete(draftId);
-    throw new Error('交易草稿已过期，请重新发起');
+    throw new WalletError('send.draft_expired');
   }
   const net = NETWORKS[s.network];
   const entry = await entryById(s.walletId);
@@ -515,7 +528,7 @@ export async function confirmSend(draftId: string, password: string): Promise<{ 
   let hex: string;
   let txid: string;
   try {
-    if (acct.xpub !== s.xpub) throw new Error('密钥与会话不一致，请重新解锁');
+    if (acct.xpub !== s.xpub) throw new WalletError('send.key_mismatch');
     const signed = signPlan(
       d.plan,
       net,
@@ -529,7 +542,7 @@ export async function confirmSend(draftId: string, password: string): Promise<{ 
   }
 
   const got = await (await indexer(s.network)).broadcast(hex);
-  if (got !== txid) throw new Error(`索引节点返回的交易 ID 与本地不一致（本地 ${txid}）`);
+  if (got !== txid) throw new WalletError('send.txid_mismatch', { txid });
   return { txid };
 }
 
@@ -544,10 +557,10 @@ export async function revealSecret(password: string): Promise<{ secret: string; 
 export async function changePassword(oldPassword: string, newPassword: string) {
   const s = await requireSession();
   const problem = passwordProblem(newPassword);
-  if (problem) throw new Error(problem);
+  if (problem) throw new WalletError(problem);
   const vault = await readVault();
   const i = vault.findIndex(e => e.id === s.walletId);
-  if (i < 0) throw new Error('钱包不存在');
+  if (i < 0) throw new WalletError('wallet.not_found');
   vault[i] = await reencryptWallet(vault[i], oldPassword, newPassword);
   await writeVault(vault);
 }
@@ -555,10 +568,10 @@ export async function changePassword(oldPassword: string, newPassword: string) {
 export async function renameWallet(name: string) {
   const s = await requireSession();
   const n = name.trim().slice(0, 32);
-  if (!n) throw new Error('名称不能为空');
+  if (!n) throw new WalletError('wallet.name_empty');
   const vault = await readVault();
   const e = vault.find(x => x.id === s.walletId);
-  if (!e) throw new Error('钱包不存在');
+  if (!e) throw new WalletError('wallet.not_found');
   e.name = n; // name is not bound into the AEAD associated data, so no re-encryption needed
   await writeVault(vault);
   await sessionStore.set(K_SESSION, { ...s, name: n });

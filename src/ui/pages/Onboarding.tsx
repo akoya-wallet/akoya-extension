@@ -2,36 +2,40 @@ import { useMemo, useState } from 'react';
 import akoyaMark from '../assets/akoya-mark.svg';
 import { APP_NAME, NETWORKS, type NetworkId } from '../../core/networks.ts';
 import { passwordProblem } from '../../core/keystore.ts';
+import { WalletError } from '../../core/errors.ts';
 import * as W from '../../ext/wallet.ts';
 import type { DerivationMode, ImportPreview, SessionInfo } from '../../ext/types.ts';
 import { formatPrl } from '../../ext/format.ts';
-import { Btn, FullAddress, Notice, PasswordField, Steps, Topbar, errMsg } from '../components/common.tsx';
+import { useI18n } from '../../i18n/index.tsx';
+import { Btn, FullAddress, LangSelect, Notice, PasswordField, Steps, Topbar } from '../components/common.tsx';
 import { IconEye } from '../components/icons.tsx';
 
 type Done = (s: SessionInfo) => void;
 
 export function Welcome({ onCreate, onImport, onCancel }: { onCreate: () => void; onImport: () => void; onCancel?: () => void }) {
+  const { t } = useI18n();
   return (
     <div className="screen">
-      {onCancel && <Topbar onBack={onCancel} />}
+      {onCancel ? <Topbar onBack={onCancel} right={<LangSelect />} /> : <LangSelect className="lang-corner" />}
       <div className="scroll center hero">
         <img className="brand-mark" src={akoyaMark} alt="Akoya" />
         <h2>{APP_NAME}</h2>
-        <p>Pearl (PRL) 自托管钱包</p>
-        <p className="small faint mt">私钥只在本机加密保存 · by PRLFlipBTC，非 Pearl 官方</p>
+        <p>{t('welcome.tagline')}</p>
+        <p className="small faint mt">{t('welcome.note')}</p>
       </div>
       <div className="footer col">
-        <Btn className="primary block" onClick={onCreate}>创建新钱包</Btn>
-        <Btn className="block" onClick={onImport}>导入助记词</Btn>
+        <Btn className="primary block" onClick={onCreate}>{t('welcome.create')}</Btn>
+        <Btn className="block" onClick={onImport}>{t('welcome.import')}</Btn>
       </div>
     </div>
   );
 }
 
 function NetworkPicker({ value, onChange }: { value: NetworkId; onChange: (n: NetworkId) => void }) {
+  const { t } = useI18n();
   return (
     <div className="field">
-      <label>网络</label>
+      <label>{t('onboard.network')}</label>
       <div className="seg">
         {(Object.keys(NETWORKS) as NetworkId[]).map(id => (
           <button key={id} className={value === id ? 'on' : ''} onClick={() => onChange(id)}>
@@ -54,33 +58,34 @@ function PasswordStep({ title, onBack, onSubmit, busy, error, network, setNetwor
   setNetwork: (n: NetworkId) => void;
   showNetwork: boolean;
 }) {
+  const { t, te } = useI18n();
   const [name, setName] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [agree, setAgree] = useState(false);
   const problem = pw ? passwordProblem(pw) : null;
-  const mismatch = pw2 && pw !== pw2 ? '两次输入不一致' : null;
+  const mismatch = pw2 && pw !== pw2 ? t('pw.mismatch') : null;
   const ok = !problem && pw && pw === pw2 && agree;
   return (
     <div className="screen">
       <Topbar title={title} onBack={onBack} />
       <div className="scroll stack">
         <div className="field">
-          <label>钱包名称</label>
-          <input className="input" value={name} maxLength={32} placeholder="例如：挖矿收益" onChange={e => setName(e.target.value)} />
+          <label>{t('pw.wallet_name')}</label>
+          <input className="input" value={name} maxLength={32} placeholder={t('pw.wallet_name_ph')} onChange={e => setName(e.target.value)} />
         </div>
         {showNetwork && <NetworkPicker value={network} onChange={setNetwork} />}
-        <PasswordField label="设置密码" value={pw} onChange={setPw} placeholder="至少 8 位" error={problem} autoFocus />
-        <PasswordField label="确认密码" value={pw2} onChange={setPw2} placeholder="再次输入" error={mismatch} onEnter={() => ok && onSubmit(name, pw)} />
-        <Notice kind="info">密码用于在本机加密助记词（Argon2id + AES-256-GCM），解锁和每次转账都需要输入。它不能代替助记词恢复钱包。</Notice>
+        <PasswordField label={t('pw.set')} value={pw} onChange={setPw} placeholder={t('pw.set_ph')} error={problem ? te(new WalletError(problem)) : null} autoFocus />
+        <PasswordField label={t('pw.confirm')} value={pw2} onChange={setPw2} placeholder={t('pw.confirm_ph')} error={mismatch} onEnter={() => ok && onSubmit(name, pw)} />
+        <Notice kind="info">{t('pw.info')}</Notice>
         <label className="check">
           <input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} />
-          我明白：忘记密码只能通过助记词重新导入，{APP_NAME} 无法找回。
+          {t('pw.ack', { app: APP_NAME })}
         </label>
         {error && <Notice kind="danger">{error}</Notice>}
       </div>
       <div className="footer">
-        <Btn className="primary" disabled={!ok} loading={busy} onClick={() => onSubmit(name, pw)}>继续</Btn>
+        <Btn className="primary" disabled={!ok} loading={busy} onClick={() => onSubmit(name, pw)}>{t('common.continue')}</Btn>
       </div>
     </div>
   );
@@ -89,6 +94,7 @@ function PasswordStep({ title, onBack, onSubmit, busy, error, network, setNetwor
 // ------------------------------------------------------------------ create
 
 export function CreateWallet({ onBack, onDone }: { onBack: () => void; onDone: Done }) {
+  const { t, te } = useI18n();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [network, setNetwork] = useState<NetworkId>('mainnet');
   const [creds, setCreds] = useState<{ name: string; pw: string } | null>(null);
@@ -98,7 +104,6 @@ export function CreateWallet({ onBack, onDone }: { onBack: () => void; onDone: D
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
 
   const quiz = useMemo(() => {
     if (!words.length) return [];
@@ -116,7 +121,7 @@ export function CreateWallet({ onBack, onDone }: { onBack: () => void; onDone: D
   if (step === 1) {
     return (
       <PasswordStep
-        title="创建钱包"
+        title={t('create.title')}
         onBack={onBack}
         busy={false}
         error={null}
@@ -135,10 +140,10 @@ export function CreateWallet({ onBack, onDone }: { onBack: () => void; onDone: D
   if (step === 2) {
     return (
       <div className="screen">
-        <Topbar title="备份助记词" onBack={() => { setWords([]); setRevealed(false); setStep(1); }} />
+        <Topbar title={t('create.backup_title')} onBack={() => { setWords([]); setRevealed(false); setStep(1); }} />
         <div className="scroll stack">
           <Steps n={2} of={3} />
-          <Notice kind="warn">这 12 个单词是恢复钱包的唯一方式。请手写在纸上，离线保存；不要截图、拍照、复制或发给任何人。</Notice>
+          <Notice kind="warn">{t('create.backup_warn')}</Notice>
           <div className={`words ${revealed ? '' : 'blur'}`}>
             {words.map((w, i) => (
               <div className="word" key={i}>
@@ -148,17 +153,17 @@ export function CreateWallet({ onBack, onDone }: { onBack: () => void; onDone: D
             ))}
             {!revealed && (
               <button className="reveal-cover" onClick={() => setRevealed(true)}>
-                <span className="row"><IconEye />确认周围无人后，点击显示</span>
+                <span className="row"><IconEye />{t('create.reveal')}</span>
               </button>
             )}
           </div>
           <label className="check">
             <input type="checkbox" checked={saved} disabled={!revealed} onChange={e => setSaved(e.target.checked)} />
-            我已按顺序抄写好助记词
+            {t('create.saved')}
           </label>
         </div>
         <div className="footer">
-          <Btn className="primary" disabled={!saved} onClick={() => setStep(3)}>下一步：验证</Btn>
+          <Btn className="primary" disabled={!saved} onClick={() => setStep(3)}>{t('create.next_verify')}</Btn>
         </div>
       </div>
     );
@@ -175,20 +180,20 @@ export function CreateWallet({ onBack, onDone }: { onBack: () => void; onDone: D
       setCreds(null);
       onDone(s);
     } catch (e) {
-      setError(errMsg(e));
+      setError(te(e));
     } finally {
       setBusy(false);
     }
   };
   return (
     <div className="screen">
-      <Topbar title="验证助记词" onBack={() => { setAnswers({}); setStep(2); }} />
+      <Topbar title={t('create.verify_title')} onBack={() => { setAnswers({}); setStep(2); }} />
       <div className="scroll stack">
         <Steps n={3} of={3} />
-        <p className="muted small" style={{ margin: 0 }}>请输入以下位置的单词，确认你已正确抄写。</p>
+        <p className="muted small" style={{ margin: 0 }}>{t('create.verify_hint')}</p>
         {quiz.map(i => (
           <div className="field" key={i}>
-            <label>第 {i + 1} 个单词</label>
+            <label>{t('create.word_n', { n: i + 1 })}</label>
             <input
               className="input"
               autoComplete="off"
@@ -201,7 +206,7 @@ export function CreateWallet({ onBack, onDone }: { onBack: () => void; onDone: D
         {error && <Notice kind="danger">{error}</Notice>}
       </div>
       <div className="footer">
-        <Btn className="primary" disabled={!quizOk} loading={busy} onClick={finish}>完成创建</Btn>
+        <Btn className="primary" disabled={!quizOk} loading={busy} onClick={finish}>{t('create.finish')}</Btn>
       </div>
     </div>
   );
@@ -210,6 +215,7 @@ export function CreateWallet({ onBack, onDone }: { onBack: () => void; onDone: D
 // ------------------------------------------------------------------ import
 
 export function ImportWallet({ onBack, onDone }: { onBack: () => void; onDone: Done }) {
+  const { t, te } = useI18n();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [text, setText] = useState('');
   const [network, setNetwork] = useState<NetworkId>('mainnet');
@@ -232,56 +238,61 @@ export function ImportWallet({ onBack, onDone }: { onBack: () => void; onDone: D
         setPreview(await W.previewImport(args()));
         setStep(2);
       } catch (e) {
-        setError(errMsg(e));
+        setError(te(e));
       } finally {
         setBusy(false);
       }
     };
+    const hint = !check
+      ? t('import.hint_hex')
+      : check.ok
+        ? check.kind === 'hex' ? t('import.ok_hex') : t('import.ok_words', { count: check.wordCount ?? 0 })
+        : wordCount >= 12 && check.reason
+          ? te(new WalletError(check.reason.code, check.reason.params))
+          : t('import.typed', { count: wordCount });
     return (
       <div className="screen">
-        <Topbar title="导入助记词" onBack={() => { setText(''); onBack(); }} />
+        <Topbar title={t('import.title')} onBack={() => { setText(''); onBack(); }} />
         <div className="scroll stack">
           <Steps n={1} of={3} />
           <div className="field">
-            <label>助记词（12/15/18/21/24 个英文单词，空格分隔）</label>
+            <label>{t('import.label')}</label>
             <textarea
               className={`textarea ${check && !check.ok && wordCount >= 12 ? 'err' : ''}`}
               value={text}
               autoFocus
               autoComplete="off"
               spellCheck={false}
-              placeholder="word1 word2 word3 …"
+              placeholder={t('import.ph')}
               onChange={e => setText(e.target.value)}
             />
-            <span className={`hint ${check?.ok ? 'ok' : check && wordCount >= 12 ? 'err' : ''}`}>
-              {!check ? '也支持官方 oyster 导出的 hex 种子' : check.ok ? (check.kind === 'hex' ? '✓ hex 种子' : `✓ ${check.wordCount} 个单词，校验通过`) : wordCount >= 12 ? check.reason : `已输入 ${wordCount} 个单词`}
-            </span>
+            <span className={`hint ${check?.ok ? 'ok' : check && wordCount >= 12 ? 'err' : ''}`}>{hint}</span>
           </div>
           <NetworkPicker value={network} onChange={setNetwork} />
           <button className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => setAdvanced(a => !a)}>
-            {advanced ? '收起高级选项' : '高级选项'}
+            {advanced ? t('import.advanced_hide') : t('import.advanced_show')}
           </button>
           {advanced && (
             <div className="card stack">
               <div className="field">
-                <label>派生方式</label>
+                <label>{t('import.derivation')}</label>
                 <div className="seg">
                   <button className={mode === 'oyster' ? 'on' : ''} onClick={() => setMode('oyster')}>
-                    官方钱包兼容<span className="v">Oyster / Pearl Wallet</span>
+                    {t('import.mode_oyster')}<span className="v">{t('import.mode_oyster_sub')}</span>
                   </button>
                   <button className={mode === 'standard' ? 'on' : ''} onClick={() => setMode('standard')}>
-                    标准 BIP32<span className="v">其他 BIP86 钱包</span>
+                    {t('import.mode_std')}<span className="v">{t('import.mode_std_sub')}</span>
                   </button>
                 </div>
-                <span className="hint">两者只在约 1% 的助记词上产生不同地址。来自官方 Pearl Wallet / oyster 的助记词请保持默认。</span>
+                <span className="hint">{t('import.mode_hint')}</span>
               </div>
-              <PasswordField label="BIP39 密语（可选）" value={passphrase} onChange={setPassphrase} placeholder="官方钱包不使用密语，留空" />
+              <PasswordField label={t('import.passphrase')} value={passphrase} onChange={setPassphrase} placeholder={t('import.passphrase_ph')} />
             </div>
           )}
           {error && <Notice kind="danger">{error}</Notice>}
         </div>
         <div className="footer">
-          <Btn className="primary" disabled={!check?.ok} loading={busy} onClick={goPreview}>下一步</Btn>
+          <Btn className="primary" disabled={!check?.ok} loading={busy} onClick={goPreview}>{t('common.next')}</Btn>
         </div>
       </div>
     );
@@ -291,31 +302,29 @@ export function ImportWallet({ onBack, onDone }: { onBack: () => void; onDone: D
     const net = NETWORKS[network];
     return (
       <div className="screen">
-        <Topbar title="确认钱包" onBack={() => setStep(1)} />
+        <Topbar title={t('import.confirm_title')} onBack={() => setStep(1)} />
         <div className="scroll stack">
           <Steps n={2} of={3} />
           <div className="card">
-            <div className="label">第一个收款地址（{preview.accountPath}/0/0）</div>
+            <div className="label">{t('import.first_address', { path: preview.accountPath })}</div>
             <div className="mt"><FullAddress address={preview.firstAddress} hrp={net.hrp} /></div>
           </div>
           {preview.activity ? (
             preview.activity.txs > 0 ? (
               <Notice kind="ok">
-                找到链上记录：{preview.activity.txs} 笔交易，{preview.activity.usedAddresses} 个已用地址，余额 {formatPrl(preview.activity.balance)} PRL。
+                {t('import.found', { txs: preview.activity.txs, used: preview.activity.usedAddresses, balance: formatPrl(preview.activity.balance) })}
               </Notice>
             ) : (
-              <Notice kind="warn">该助记词在 {net.label} 上没有交易记录。如果你在官方钱包里有余额，请核对上面的地址是否与官方钱包「收款」中的地址一致，或检查网络/高级选项。</Notice>
+              <Notice kind="warn">{t('import.not_found', { network: net.label })}</Notice>
             )
           ) : (
-            <Notice kind="warn">暂时无法查询链上记录：{preview.activityError}</Notice>
+            <Notice kind="warn">{t('import.lookup_failed', { detail: te(preview.activityError) })}</Notice>
           )}
-          {preview.divergesFromBip32 && (
-            <Notice kind="info">这个助记词触发了 oyster 的非标准派生，官方兼容模式与标准 BIP32 地址不同。当前使用官方兼容模式。</Notice>
-          )}
+          {preview.divergesFromBip32 && <Notice kind="info">{t('import.diverges')}</Notice>}
         </div>
         <div className="footer">
-          <Btn onClick={() => setStep(1)}>返回修改</Btn>
-          <Btn className="primary" onClick={() => setStep(3)}>是我的钱包</Btn>
+          <Btn onClick={() => setStep(1)}>{t('import.edit')}</Btn>
+          <Btn className="primary" onClick={() => setStep(3)}>{t('import.mine')}</Btn>
         </div>
       </div>
     );
@@ -323,7 +332,7 @@ export function ImportWallet({ onBack, onDone }: { onBack: () => void; onDone: D
 
   return (
     <PasswordStep
-      title="设置密码"
+      title={t('import.set_password')}
       onBack={() => setStep(2)}
       busy={busy}
       error={error}
@@ -339,7 +348,7 @@ export function ImportWallet({ onBack, onDone }: { onBack: () => void; onDone: D
           setPassphrase('');
           onDone(s);
         } catch (e) {
-          setError(errMsg(e));
+          setError(te(e));
         } finally {
           setBusy(false);
         }

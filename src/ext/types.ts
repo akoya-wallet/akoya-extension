@@ -16,7 +16,7 @@ export interface SeedCheck {
   ok: boolean;
   kind?: 'mnemonic' | 'hex';
   wordCount?: number;
-  reason?: string;
+  reason?: { code: string; params?: Record<string, number> };
 }
 
 export interface SeedArgs {
@@ -31,7 +31,8 @@ export interface ImportPreview {
   accountPath: string;
   divergesFromBip32: boolean;
   activity: { txs: number; balance: string; usedAddresses: number } | null;
-  activityError?: string;
+  /** raw error, localised by the UI */
+  activityError?: unknown;
 }
 
 export interface SessionInfo {
@@ -113,9 +114,12 @@ export interface SendPreview {
   expiresAt: number;
 }
 
+export type Language = 'en' | 'zh-CN';
+
 export interface Settings {
   indexers: Record<NetworkId, string[]>;
   autoLockMinutes: number;
+  language: Language;
 }
 
 export interface IndexerStatus {
@@ -124,5 +128,6 @@ export interface IndexerStatus {
   height?: number;
   chain?: string;
   inSync?: boolean;
-  error?: string;
+  /** raw error, localised by the UI */
+  error?: unknown;
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as W from '../ext/wallet.ts';
 import { extensionUrl, isPopup, openTab } from '../ext/platform.ts';
-import type { Overview, SessionInfo, WalletMeta } from '../ext/types.ts';
+import type { Language, Overview, SessionInfo, WalletMeta } from '../ext/types.ts';
+import { I18nProvider } from '../i18n/index.tsx';
 import { ToastProvider } from './components/common.tsx';
 import { CreateWallet, ImportWallet, Welcome } from './pages/Onboarding.tsx';
 import { MainShell, Receive, Unlock } from './pages/Main.tsx';
@@ -25,9 +26,11 @@ export function App() {
   const [route, setRoute] = useState<Route>({ k: 'loading' });
   const [wallets, setWallets] = useState<WalletMeta[]>([]);
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const [lang, setLang] = useState<Language | null>(null);
 
   const boot = useCallback(async () => {
-    const list = await W.listWallets();
+    const [list, settings] = await Promise.all([W.listWallets(), W.getSettings()]);
+    setLang(l => l ?? settings.language);
     setWallets(list);
     if (!list.length) {
       // like Phantom: onboarding happens in a full tab so the popup can't close mid-backup
@@ -49,6 +52,10 @@ export function App() {
 
   useEffect(() => void boot(), [boot]);
 
+  const persistLang = useCallback((l: Language) => {
+    void W.setSettings({ language: l });
+  }, []);
+
   const addWallet = () => {
     if (inExtension && isPopup()) {
       openTab(extensionUrl('popup.html?tab=1'));
@@ -67,6 +74,8 @@ export function App() {
     setSession(null);
     setRoute({ k: 'unlock', id: session?.walletId });
   };
+
+  if (!lang) return <div className="screen" />;
 
   let view;
   switch (route.k) {
@@ -134,5 +143,9 @@ export function App() {
       break;
   }
 
-  return <ToastProvider>{view}</ToastProvider>;
+  return (
+    <I18nProvider initial={lang} onChange={persistLang}>
+      <ToastProvider>{view}</ToastProvider>
+    </I18nProvider>
+  );
 }

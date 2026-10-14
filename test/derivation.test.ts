@@ -7,6 +7,7 @@ import { HARDENED, deriveChild, masterFromSeed } from '../src/core/hd.ts';
 import { decodeAddress, taprootAddress } from '../src/core/address.ts';
 import { fromHex, toHex } from '../src/core/encoding.ts';
 import { NETWORKS, type PearlNetwork } from '../src/core/networks.ts';
+import type { WalletError } from '../src/core/errors.ts';
 import { ABANDON, ABANDON_VECTORS, LEADING_ZERO, WADDRMGR, WADDRMGR_SEED } from './vectors.ts';
 
 test('vector: oyster waddrmgr fixture (mainnet m/86\'/808276\'/0\')', () => {
@@ -81,7 +82,9 @@ test('seed parsing: hex seeds, normalization, bad input', () => {
   assert.equal(parseSeed('abandon abandon abandon').kind, 'invalid');
   const r = parseSeed('foo bar baz qux quux corge grault garply waldo fred plugh xyzzy');
   assert.equal(r.kind, 'invalid');
-  assert.ok(r.kind === 'invalid' && !r.reason.includes('foo'), 'error messages must not echo seed words');
+  // errors carry a code + word position, never the word itself
+  assert.ok(r.kind === 'invalid' && r.reason.code === 'seed.unknown_word' && r.reason.params?.position === 1);
+  assert.ok(r.kind === 'invalid' && !JSON.stringify(r.reason).includes('foo'), 'errors must not echo seed words');
 });
 
 test('AddressBook refuses private keys and out-of-range paths', () => {
@@ -97,7 +100,7 @@ test('address decoding validates checksum, hrp and witness version', () => {
   const d = decodeAddress('prl1psayn40fkp3f3szxztahxwszhyjfxe3u9tqxycujd6q2zcw4uc99sm7r4na', net);
   assert.equal(d.type, 'taproot');
   assert.equal(d.script[0], 0x51);
-  assert.throws(() => decodeAddress('tprl1pmxa4c2w8cp6dq0j65sm4ha5qglr83xuwqhjlnzgr9etj8l9n5rrqgkhc6a', net), /前缀/);
+  assert.throws(() => decodeAddress('tprl1pmxa4c2w8cp6dq0j65sm4ha5qglr83xuwqhjlnzgr9etj8l9n5rrqgkhc6a', net), (e: WalletError) => e.code === 'address.wrong_network' && e.params.hrp === 'prl');
   assert.throws(() => decodeAddress('prl1psayn40fkp3f3szxztahxwszhyjfxe3u9tqxycujd6q2zcw4uc99sm7r4nb', net)); // checksum
   assert.equal(decodeAddress('tprl1pmxa4c2w8cp6dq0j65sm4ha5qglr83xuwqhjlnzgr9etj8l9n5rrqgkhc6a', NETWORKS.testnet2).type, 'taproot');
   const { address } = taprootAddress(fromHex('02af08f3d1bb1ccaed1659e88b5a8d73f412628e44ddcbcbdc54b6b81f20c31375'), net);

@@ -32,8 +32,8 @@ test('xpub: bounds token/tx lists and string lengths', async () => {
 });
 
 test('surfaces indexer error messages, truncated', async () => {
-  await assert.rejects(fake({ error: 'x'.repeat(5000) }, 400).broadcast('00'), (e: BlockbookError) => e.message.length <= 300);
-  await assert.rejects(fake('<html>oops</html>', 502).status(), /非 JSON/);
+  await assert.rejects(fake({ error: 'x'.repeat(5000) }, 400).broadcast('00'), (e: BlockbookError) => e.code === 'indexer.rejected' && String(e.params.detail).length <= 300);
+  await assert.rejects(fake('<html>oops</html>', 502).status(), (e: BlockbookError) => e.code === 'indexer.non_json' && e.params.status === 502);
 });
 
 test('broadcast must return a txid', async () => {

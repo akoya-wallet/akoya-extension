@@ -1,5 +1,8 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
 // Dev-only: lets `npm run dev` (a normal web page, no host permissions) reach the Blockbook
 // indexers. Requests go out from Node; run with NODE_USE_ENV_PROXY=1 behind a proxy.
@@ -37,6 +40,7 @@ function devIndexerProxy(): Plugin {
 
 export default defineConfig({
   plugins: [react(), devIndexerProxy()],
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   base: './',
   build: {
     outDir: 'dist',

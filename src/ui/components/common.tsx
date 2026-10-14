@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import QRCode from 'qrcode';
+import { LANGUAGES, useI18n } from '../../i18n/index.tsx';
+import type { Language } from '../../ext/types.ts';
 import { IconBack, IconClose, IconInfo, IconWarn } from './icons.tsx';
 
 // ---------- toast ----------
@@ -25,22 +27,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 /** Copies non-secret text (addresses, txids). Mnemonics are never copied. */
 export function useCopy() {
   const toast = useToast();
-  return async (text: string, label = '已复制') => {
+  const { t } = useI18n();
+  return async (text: string, label = t('common.copied')) => {
     try {
       await navigator.clipboard.writeText(text);
       toast(label);
     } catch {
-      toast('复制失败');
+      toast(t('common.copy_failed'));
     }
   };
 }
 
 // ---------- layout ----------
 export function Topbar({ title, onBack, onClose, right }: { title?: ReactNode; onBack?: () => void; onClose?: () => void; right?: ReactNode }) {
+  const { t } = useI18n();
   return (
     <div className="topbar">
       {onBack ? (
-        <button className="icon-btn" onClick={onBack} aria-label="返回">
+        <button className="icon-btn" onClick={onBack} aria-label={t('common.back')}>
           <IconBack />
         </button>
       ) : (
@@ -48,7 +52,7 @@ export function Topbar({ title, onBack, onClose, right }: { title?: ReactNode; o
       )}
       <h1>{title}</h1>
       {right ?? (onClose ? (
-        <button className="icon-btn" onClick={onClose} aria-label="关闭">
+        <button className="icon-btn" onClick={onClose} aria-label={t('common.close')}>
           <IconClose />
         </button>
       ) : (
@@ -99,8 +103,8 @@ export function Sheet({ onClose, children }: { onClose: () => void; children: Re
 export function PasswordField({
   value,
   onChange,
-  label = '密码',
-  placeholder = '输入密码',
+  label,
+  placeholder,
   autoFocus,
   onEnter,
   error,
@@ -113,9 +117,11 @@ export function PasswordField({
   onEnter?: () => void;
   error?: string | null;
 }) {
+  const { t } = useI18n();
+  const shownLabel = label ?? t('common.password');
   return (
     <div className="field">
-      {label && <label>{label}</label>}
+      {shownLabel && <label>{shownLabel}</label>}
       <input
         className={`input ${error ? 'err' : ''}`}
         type="password"
@@ -123,7 +129,7 @@ export function PasswordField({
         spellCheck={false}
         value={value}
         autoFocus={autoFocus}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t('common.password_ph')}
         onChange={e => onChange(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && onEnter?.()}
       />
@@ -154,6 +160,7 @@ export function FullAddress({ address, hrp }: { address: string; hrp: string }) 
 }
 
 export function QrCode({ text }: { text: string }) {
+  const { t } = useI18n();
   const [src, setSrc] = useState<string>('');
   useEffect(() => {
     let alive = true;
@@ -164,7 +171,7 @@ export function QrCode({ text }: { text: string }) {
       alive = false;
     };
   }, [text]);
-  return <div className="qr">{src && <img src={src} alt="地址二维码" />}</div>;
+  return <div className="qr">{src && <img src={src} alt={t('common.qr_alt')} />}</div>;
 }
 
 export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
@@ -182,3 +189,14 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]) {
 }
 
 export const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+export function LangSelect({ className = '' }: { className?: string }) {
+  const { lang, setLang, t } = useI18n();
+  return (
+    <select className={`lang-select ${className}`} aria-label={t('common.language')} value={lang} onChange={e => setLang(e.target.value as Language)}>
+      {LANGUAGES.map(l => (
+        <option key={l.id} value={l.id}>{l.label}</option>
+      ))}
+    </select>
+  );
+}

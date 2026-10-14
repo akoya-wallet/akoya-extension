@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Akoya — Pearl (PRL) Wallet",
-  "short_name": "Akoya",
-  "description": "Open-source self-custody wallet for Pearl (PRL) by PRLFlipBTC. Not affiliated with Pearl Research Labs.",
+  "name": "__MSG_appName__",
+  "short_name": "__MSG_appShortName__",
+  "description": "__MSG_appDesc__",
   "version": "0.1.1",
+  "default_locale": "en",
   "homepage_url": "https://github.com/akoya-wallet/akoya-extension",
   "minimum_chrome_version": "120",
   "icons": {
@@ -13,7 +14,7 @@
     "128": "icons/akoya-128.png"
   },
   "action": {
-    "default_title": "Akoya",
+    "default_title": "__MSG_appShortName__",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/akoya-16.png",

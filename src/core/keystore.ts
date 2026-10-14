@@ -5,6 +5,7 @@
 
 import { argon2idAsync } from '@noble/hashes/argon2.js';
 import { base64 } from '@scure/base';
+import { WalletError } from './errors.ts';
 import type { DerivationMode } from './hd.ts';
 import type { NetworkId } from './networks.ts';
 
@@ -85,9 +86,9 @@ export async function encryptWallet(
   }
 }
 
-export class WrongPassword extends Error {
+export class WrongPassword extends WalletError {
   constructor() {
-    super('密码错误');
+    super('vault.wrong_password');
     this.name = 'WrongPassword';
   }
 }
@@ -118,9 +119,9 @@ export async function reencryptWallet(entry: VaultEntry, oldPassword: string, ne
   return encryptWallet(entry, secret, newPassword, { m: entry.kdf.m, t: entry.kdf.t, p: entry.kdf.p });
 }
 
-/** Minimal password policy for the vault. */
-export function passwordProblem(pw: string): string | null {
-  if (pw.length < 8) return '密码至少 8 位';
-  if (/^(.)\1+$/.test(pw)) return '密码过于简单';
+/** Minimal password policy for the vault. Returns an error code or null. */
+export function passwordProblem(pw: string): 'password.too_short' | 'password.too_simple' | null {
+  if (pw.length < 8) return 'password.too_short';
+  if (/^(.)\1+$/.test(pw)) return 'password.too_simple';
   return null;
 }

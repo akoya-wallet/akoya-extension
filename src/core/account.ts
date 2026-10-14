@@ -8,43 +8,46 @@ import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { HARDENED, HDKey, deriveChild, divergesAtHardenedChild, masterFromSeed, neuter, type DerivationMode } from './hd.ts';
 import { taprootAddress } from './address.ts';
 import { fromHex } from './encoding.ts';
+import { WalletError } from './errors.ts';
 import { ACCOUNT, PURPOSE_BIP86, bip32Versions, type PearlNetwork } from './networks.ts';
 
 export const VALID_WORD_COUNTS = [12, 15, 18, 21, 24];
 /** Hard upper bound for any address index we derive (guards against indexer-supplied paths). */
 export const MAX_ADDRESS_INDEX = 100_000;
 
+export type SeedProblem = { code: string; params?: Record<string, number> };
+
 export type ParsedSeed =
   | { kind: 'mnemonic'; normalized: string; wordCount: number }
   | { kind: 'hex'; normalized: string }
-  | { kind: 'invalid'; reason: string };
+  | { kind: 'invalid'; reason: SeedProblem };
 
 export const normalizeMnemonic = (raw: string) => raw.trim().toLowerCase().replace(/\s+/g, ' ');
 
 export function parseSeed(raw: string): ParsedSeed {
   const trimmed = raw.trim();
-  if (!trimmed) return { kind: 'invalid', reason: '请输入助记词' };
+  if (!trimmed) return { kind: 'invalid', reason: { code: 'seed.empty' } };
 
   if (!/\s/.test(trimmed)) {
     const h = trimmed.toLowerCase().replace(/^0x/, '');
     if (/^[0-9a-f]+$/.test(h)) {
-      if (h.length % 2) return { kind: 'invalid', reason: 'Hex 种子长度必须为偶数' };
-      if (h.length / 2 < 16 || h.length / 2 > 64) return { kind: 'invalid', reason: 'Hex 种子必须为 128~512 位' };
+      if (h.length % 2) return { kind: 'invalid', reason: { code: 'seed.hex_odd' } };
+      if (h.length / 2 < 16 || h.length / 2 > 64) return { kind: 'invalid', reason: { code: 'seed.hex_length' } };
       return { kind: 'hex', normalized: h };
     }
-    return { kind: 'invalid', reason: '请输入 12/15/18/21/24 个英文助记词，或 hex 种子' };
+    return { kind: 'invalid', reason: { code: 'seed.format' } };
   }
 
   const normalized = normalizeMnemonic(trimmed);
   const words = normalized.split(' ');
   if (!VALID_WORD_COUNTS.includes(words.length)) {
-    return { kind: 'invalid', reason: `助记词应为 12/15/18/21/24 个单词（当前 ${words.length} 个）` };
+    return { kind: 'invalid', reason: { code: 'seed.word_count', params: { count: words.length } } };
   }
   const unknown = words.findIndex(w => !wordlist.includes(w));
   // report the position, never echo the word itself
-  if (unknown >= 0) return { kind: 'invalid', reason: `第 ${unknown + 1} 个单词不在 BIP39 英文词表中` };
+  if (unknown >= 0) return { kind: 'invalid', reason: { code: 'seed.unknown_word', params: { position: unknown + 1 } } };
   if (!validateMnemonic(normalized, wordlist)) {
-    return { kind: 'invalid', reason: '助记词校验和不正确，请检查单词顺序和拼写' };
+    return { kind: 'invalid', reason: { code: 'seed.checksum' } };
   }
   return { kind: 'mnemonic', normalized, wordCount: words.length };
 }
@@ -59,7 +62,7 @@ export async function seedBytes(secret: string, passphrase = ''): Promise<Uint8A
   const p = parseSeed(secret);
   if (p.kind === 'mnemonic') return mnemonicToSeed(p.normalized, passphrase);
   if (p.kind === 'hex') return fromHex(p.normalized);
-  throw new Error(p.reason);
+  throw new WalletError(p.reason.code, p.reason.params);
 }
 
 export const accountPath = (net: PearlNetwork) => [PURPOSE_BIP86 + HARDENED, net.coinType + HARDENED, ACCOUNT + HARDENED];

@@ -1,0 +1,50 @@
+{
+  "name": "akoya-wallet",
+  "version": "0.1.0",
+  "description": "Akoya — self-custody Chrome extension wallet for Pearl (PRL)",
+  "author": "PRLFlipBTC",
+  "license": "MIT",
+  "homepage": "https://github.com/akoya-wallet/akoya-extension#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akoya-wallet/akoya-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/akoya-wallet/akoya-extension/issues"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "NODE_USE_ENV_PROXY=1 vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test test/*.test.ts",
+    "test:vectors": "node --test test/derivation.test.ts",
+    "security:gates": "bash scripts/security-gates.sh",
+    "package": "npm run build && bash scripts/package.sh"
+  },
+  "dependencies": {
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@scure/base": "2.4.0",
+    "@scure/bip32": "2.4.0",
+    "@scure/bip39": "2.4.0",
+    "@scure/btc-signer": "2.4.1",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.4",
+    "@types/node": "24.19.2",
+    "@types/qrcode": "1.5.5",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "@vitejs/plugin-react": "5.1.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
+  },
+  "engines": {
+    "node": ">=22.18"
+  }
+}

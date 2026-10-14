@@ -1,0 +1,15 @@
+# Secret scanning config (CI: gitleaks detect --log-opts="--all").
+# Default rules stay on; only the two files that hold *public* test vectors are exempt:
+#   - test/vectors.ts: Pearl repo fixtures (wallet/waddrmgr/common_test.go) and the
+#     well-known "abandon … about" phrase
+#   - test/fixtures/*.json: public mainnet transaction data
+# None of these control funds belonging to the project. Never add a real key anywhere — including these files.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "public test vectors"
+paths = [
+  '''^test/vectors\.ts$''',
+  '''^test/fixtures/[^/]+\.json$''',
+]

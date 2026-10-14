@@ -1,0 +1,17 @@
+node_modules/
+dist/
+release/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pem
+*.crx
+.vite/
+
+# local agent tooling
+.claude/
+
+# org-level files, pushed to akoya-wallet/.github separately
+org/

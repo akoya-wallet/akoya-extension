@@ -1,0 +1,11 @@
+# TODO: replace @Madao-3 with an org team such as @akoya-wallet/maintainers once it exists.
+# Maintainer review is required for key, derivation, signing, permissions and supply-chain files.
+# Enable "Require review from Code Owners" in branch protection for this to be enforced.
+*                         @Madao-3
+/src/core/                @Madao-3
+/public/manifest.json     @Madao-3
+/package.json             @Madao-3
+/package-lock.json        @Madao-3
+/.npmrc                   @Madao-3
+/.github/                 @Madao-3
+/scripts/                 @Madao-3

@@ -1,0 +1,39 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **Never paste your recovery phrase, private key, or password here.** Nobody from this project will ever ask for them.
+        Security issues → use private vulnerability reporting instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, what you expected, and what you saw.
+    validations:
+      required: true
+  - type: dropdown
+    id: network
+    attributes:
+      label: Network
+      options: [Mainnet, Testnet2]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Akoya version / Chrome version
+      placeholder: "0.1.0 / Chrome 131"
+  - type: input
+    id: txid
+    attributes:
+      label: Related txid or address (public data only, optional)
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety
+      options:
+        - label: I did not include any recovery phrase, private key, xprv or password.
+          required: true

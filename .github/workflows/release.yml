@@ -1,0 +1,49 @@
+name: release
+
+# Push a tag like v0.1.0 (matching public/manifest.json "version") to publish a GitHub release
+# with the extension zip, its SHA-256, and a signed SLSA build-provenance attestation.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write      # create the GitHub release
+      id-token: write      # sign the provenance attestation (Sigstore)
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.11.1
+
+      - name: Tag must match manifest version
+        run: |
+          v="$(node -p "require('./public/manifest.json').version")"
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != manifest v$v"; exit 1; }
+
+      - run: npm ci
+      - run: bash scripts/security-gates.sh
+      - run: npm test
+      - run: npm audit --audit-level=moderate
+      - run: npm run package
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/akoya-*.zip
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/akoya-*.zip release/akoya-*.zip.sha256 \
+            --title "Akoya $GITHUB_REF_NAME" --generate-notes --verify-tag

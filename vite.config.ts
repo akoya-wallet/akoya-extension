@@ -1,0 +1,50 @@
+import { defineConfig, type Plugin } from 'vite';
+import react from '@vitejs/plugin-react';
+
+// Dev-only: lets `npm run dev` (a normal web page, no host permissions) reach the Blockbook
+// indexers. Requests go out from Node; run with NODE_USE_ENV_PROXY=1 behind a proxy.
+const DEV_UPSTREAMS: Record<string, string> = {
+  mainnet: 'https://blockbook.pearlresearch.ai',
+  testnet2: 'https://blockbook.testnet.pearlresearch.ai',
+};
+
+function devIndexerProxy(): Plugin {
+  return {
+    name: 'akoya-dev-indexer-proxy',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__bb', async (req, res) => {
+        const m = /^\/(mainnet|testnet2)(\/.*)$/.exec(req.url ?? '');
+        if (!m) {
+          res.statusCode = 404;
+          return res.end();
+        }
+        try {
+          const body = req.method === 'POST' ? await new Promise<string>(r => { let b = ''; req.on('data', c => (b += c)); req.on('end', () => r(b)); }) : undefined;
+          const up = await fetch(DEV_UPSTREAMS[m[1]] + m[2], { method: req.method, body, headers: body ? { 'Content-Type': 'text/plain' } : undefined });
+          res.statusCode = up.status;
+          res.setHeader('Content-Type', up.headers.get('content-type') ?? 'application/json');
+          res.end(await up.text());
+        } catch (e) {
+          const cause = (e as { cause?: { code?: string } }).cause?.code;
+          res.statusCode = 502;
+          res.end(JSON.stringify({ error: `dev proxy: ${String(e)}${cause ? ` (${cause})` : ''}${` — proxy=${(process.env.HTTPS_PROXY || process.env.https_proxy || 'unset').replace(/\/\/[^@/]*@/, '//***@')}`}` }));
+        }
+      });
+    },
+  };
+}
+
+export default defineConfig({
+  plugins: [react(), devIndexerProxy()],
+  base: './',
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    sourcemap: false,
+    target: 'chrome120',
+    modulePreload: { polyfill: false },
+    rollupOptions: { input: { popup: 'popup.html' } },
+  },
+  server: { port: 5199, strictPort: true },
+});

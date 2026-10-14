@@ -152,6 +152,22 @@ async function drive() {
 }
 
 function Frame() {
+  if (scene === 'marquee') {
+    return (
+      <div className="marquee">
+        <div className="copy">
+          <img className="lockup" src={lockup} alt="Akoya" />
+          <h1>The open-source wallet for Pearl miners</h1>
+          <p>Self-custody · Same addresses as the official Pearl Wallet · Reproducible, verifiable builds</p>
+        </div>
+        <div className="device">
+          <div id="root">
+            <App />
+          </div>
+        </div>
+      </div>
+    );
+  }
   const c = COPY[scene];
   if (scene === 'promo') {
     return (
@@ -186,7 +202,7 @@ if (scene === 'promo') {
   createRoot(document.getElementById('frame')!).render(<Frame />);
   document.title = 'ready';
 } else {
-  document.body.className = 'shot-body';
+  document.body.className = scene === 'marquee' ? 'marquee-body' : 'shot-body';
   await setup();
   createRoot(document.getElementById('frame')!).render(<Frame />);
   void drive();

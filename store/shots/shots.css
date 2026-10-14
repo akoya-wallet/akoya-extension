@@ -27,3 +27,20 @@ body.promo-body { width: 440px; height: 280px; overflow: hidden; }
 .promo-mark { width: 104px; height: 104px; }
 .promo-name { font-size: 46px; font-weight: 750; letter-spacing: -1px; line-height: 1; }
 .promo-tag { margin-top: 10px; font-size: 17px; color: #b9bfd6; line-height: 1.35; }
+
+/* marquee promo tile (1400×560) */
+body.marquee-body { width: 1400px; height: 560px; overflow: hidden; background: #11172a; }
+.marquee {
+  width: 1400px; height: 560px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between;
+  padding: 0 150px 0 120px; overflow: hidden;
+  background:
+    radial-gradient(900px 520px at 80% 20%, rgba(157, 146, 252, 0.30), transparent 60%),
+    radial-gradient(700px 420px at 0% 100%, rgba(79, 209, 161, 0.10), transparent 60%),
+    #11172a;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #fafbfe;
+}
+.marquee .copy { width: 640px; }
+.marquee .copy .lockup { width: 176px; margin-bottom: 36px; }
+.marquee .copy h1 { font-size: 56px; line-height: 1.06; letter-spacing: -1.4px; margin: 0 0 22px; font-weight: 760; }
+.marquee .copy p { font-size: 21px; line-height: 1.5; color: #b9bfd6; margin: 0; }
+.marquee .device { transform: scale(0.84); transform-origin: center; }

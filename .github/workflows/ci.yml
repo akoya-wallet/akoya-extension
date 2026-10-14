@@ -53,3 +53,14 @@ jobs:
 
       - name: Package + checksums
         run: bash scripts/package.sh
+
+      # Every CI run publishes a downloadable test build (Actions run page → Artifacts).
+      - name: Upload test build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: akoya-${{ github.sha }}
+          path: |
+            release/*.zip
+            release/*.sha256
+          retention-days: 30
+          if-no-files-found: error

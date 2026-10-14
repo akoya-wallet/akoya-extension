@@ -45,5 +45,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # 0.x releases are alpha: published as pre-releases
+          pre=""; case "$GITHUB_REF_NAME" in v0.*|*-*) pre="--prerelease";; esac
           gh release create "$GITHUB_REF_NAME" release/akoya-*.zip release/akoya-*.zip.sha256 \
-            --title "Akoya $GITHUB_REF_NAME" --generate-notes --verify-tag
+            --title "Akoya $GITHUB_REF_NAME" --generate-notes --verify-tag $pre --notes-file .github/release-notes.md

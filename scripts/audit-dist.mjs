@@ -42,14 +42,22 @@ for (const f of files) {
 }
 
 // ---- html: only the bundled module script, no inline code, no remote resources
+// Parsed by opening tag (no closing-tag regex): every <script …> must be exactly the Vite module
+// entry, immediately closed, and nothing else may load code or remote resources.
+const ENTRY = /^<script type="module" crossorigin src="\.\/assets\/[\w.-]+\.js">$/;
 for (const f of files.filter(f => f.endsWith('.html'))) {
   const html = readFileSync(f, 'utf8');
-  for (const tag of html.match(/<script\b[^>]*>[\s\S]*?<\/script>/gi) ?? []) {
-    if (!/\bsrc="\.\/assets\/[\w.-]+\.js"/.test(tag)) fail(`${f}: script must be a local bundle: ${tag.slice(0, 80)}`);
-    if (!/><\/script>$/.test(tag)) fail(`${f}: inline script content`);
+  const lower = html.toLowerCase();
+  for (const m of html.matchAll(/<script\b[^>]*>/gi)) {
+    if (!ENTRY.test(m[0])) fail(`${f}: unexpected script tag ${m[0].slice(0, 100)}`);
+    if (!lower.startsWith('</script>', m.index + m[0].length)) fail(`${f}: script tag is not empty`);
   }
-  if (/\s(src|href)="(https?:)?\/\//i.test(html)) fail(`${f}: references a remote resource`);
-  if (/\son[a-z]+="/i.test(html)) fail(`${f}: inline event handler`);
+  for (const tag of ['<iframe', '<object', '<embed', '<base', '<meta http-equiv="refresh"']) {
+    if (lower.includes(tag)) fail(`${f}: contains ${tag}`);
+  }
+  if (/\s(src|href|action)\s*=\s*["']?\s*(https?:)?\/\//i.test(html)) fail(`${f}: references a remote resource`);
+  if (/\son[a-z]+\s*=/i.test(html)) fail(`${f}: inline event handler`);
+  if (/javascript:/i.test(html)) fail(`${f}: javascript: URL`);
 }
 
 // ---- js bundle

@@ -67,13 +67,13 @@ Akoya 由独立团队 PRLFlipBTC 开发，非 Pearl Research Labs 官方产品�
 **Homepage URL:** `https://akoyawallet.app`
 **Support URL:** `https://github.com/akoya-wallet/akoya-extension/issues`
 
-**Graphics** (in `store/assets/`):
+**Graphics** (in `store/assets/`; regenerate with the harness in `store/shots/` — demo data only, see its header):
 
 | Asset | Size | File |
 |---|---|---|
 | Store icon | 128×128 PNG | `public/icons/akoya-128.png` (already in the package) |
-| Screenshots (1–5) | 1280×800 | `store/assets/screenshot-*.png` |
-| Small promo tile (required) | 440×280 | `store/assets/promo-small.png` |
+| Screenshots (1–5) | 1280×800, 24-bit PNG | `store/assets/screenshot-{1-mining,2-receive,3-review,4-nodes,5-chinese}.png` |
+| Small promo tile (required) | 440×280, 24-bit PNG | `store/assets/promo-small-440x280.png` |
 | Marquee (optional) | 1400×560 | `store/assets/promo-marquee.png` |
 
 ---

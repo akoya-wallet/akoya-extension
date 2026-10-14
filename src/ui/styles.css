@@ -239,3 +239,6 @@ body.tab #root { width: 400px; height: 660px; border-radius: 22px; border: 1px s
 .item.choice.on .radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
 .accent-text { color: var(--accent); white-space: nowrap; }
 .mono-input { font-family: var(--mono); font-size: 12px; }
+.title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.title-row .ellipsis { min-width: 0; }
+.title-row .pill { flex-shrink: 0; }

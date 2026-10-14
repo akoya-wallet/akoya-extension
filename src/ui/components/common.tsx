@@ -164,7 +164,9 @@ export function QrCode({ text }: { text: string }) {
   // generated locally (zero-dependency @paulmillr/qr), rendered as an <img>, never injected as HTML
   const src = useMemo(() => {
     try {
-      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(encodeQR(text, 'svg', { ecc: 'medium', border: 0 }))}`;
+      // one <rect> per module: crispEdges snaps them to the pixel grid (no anti-aliasing seams)
+      const svg = encodeQR(text, 'svg', { ecc: 'medium', border: 0 }).replace('<svg ', '<svg shape-rendering="crispEdges" ');
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     } catch {
       return '';
     }

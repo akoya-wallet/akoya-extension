@@ -19,7 +19,8 @@ export const IconActivity = () => <I><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></I>;
 export const IconArrowDown = () => <I><path d="M12 5v14M5 12l7 7 7-7" /></I>;
 export const IconArrowUp = () => <I><path d="M12 19V5M5 12l7-7 7 7" /></I>;
 export const IconSwap = () => <I><path d="M7 7h13l-3-3M17 17H4l3 3" /></I>;
-export const IconPick = () => <I><path d="M14.5 4.5l5 5M3 21l6-1.5L19.5 9 15 4.5 4.5 15z" /></I>;
+// pickaxe: diagonal handle + curved head
+export const IconPick = () => <I><path d="M4.5 19.5 13.5 10.5" /><path d="M8.5 4.5c4.6-1.6 9.6 1.4 11 6" /><path d="M11.5 6.2l6.3 6.3" /></I>;
 export const IconCopy = () => <I><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></I>;
 export const IconExternal = () => <I><path d="M14 3h7v7M10 14L21 3M21 14v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h6" /></I>;
 export const IconLock = () => <I><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></I>;

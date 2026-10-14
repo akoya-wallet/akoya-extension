@@ -292,9 +292,9 @@ function Indexers({ settings, network, onBack }: { settings: S; network: Network
                 onClick={() => !active && save([u, ...s.indexers[net].filter(x => x !== u)])}>
                 <span className="radio" />
                 <div className="grow">
-                  <div className="title ellipsis">
-                    {new URL(u).host}
-                    {official.has(u) && <span className="pill" style={{ marginLeft: 6 }}>{t('idx.official')}</span>}
+                  <div className="title title-row">
+                    <span className="ellipsis">{new URL(u).host}</span>
+                    {official.has(u) && <span className="pill">{t('idx.official')}</span>}
                   </div>
                   <div className="meta">
                     {!st ? t('idx.checking')
@@ -358,9 +358,9 @@ function Explorers({ network, onBack }: { network: NetworkId; onBack: () => void
                 onClick={() => !active && act(() => W.selectExplorer(net, ex.id))}>
                 <span className="radio" />
                 <div className="grow">
-                  <div className="title ellipsis">
-                    {ex.name}
-                    {ex.builtin && <span className="pill" style={{ marginLeft: 6 }}>{t('idx.official')}</span>}
+                  <div className="title title-row">
+                    <span className="ellipsis">{ex.name}</span>
+                    {ex.builtin && <span className="pill">{t('idx.official')}</span>}
                   </div>
                   <div className="meta ellipsis">{new URL(ex.tx.replace('{txid}', 'x')).host}</div>
                 </div>

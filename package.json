@@ -1,6 +1,6 @@
 {
   "name": "akoya-wallet",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Akoya — self-custody Chrome extension wallet for Pearl (PRL)",
   "author": "PRLFlipBTC",
   "license": "MIT",

@@ -54,6 +54,8 @@ export interface TxItem {
   confirmations: number;
   time: number;
   coinbase: boolean;
+  /** incoming payment funded by coinbase outputs — i.e. a mining-pool payout */
+  poolPayout: boolean;
   counterparty?: string;
 }
 
@@ -80,6 +82,8 @@ export interface Overview {
   indexer: string;
   /** indexer entries that did not match local derivation and were ignored */
   rejected: number;
+  /** coinbase rewards + pool payouts received today (local time), grains */
+  minedToday: string;
   updatedAt: number;
 }
 
@@ -123,8 +127,23 @@ export interface SendPreview {
 
 export type Language = 'en' | 'zh-CN';
 
+export interface Explorer {
+  id: string;
+  name: string;
+  /** https URL template containing {txid} */
+  tx: string;
+  /** https URL template containing {address} */
+  address: string;
+  builtin: boolean;
+}
+
 export interface Settings {
+  /** Blockbook RPC endpoints; the first is used, the rest are fallbacks */
   indexers: Record<NetworkId, string[]>;
+  /** user-added explorers (built-ins come from core/networks.ts) */
+  customExplorers: Record<NetworkId, Omit<Explorer, 'builtin'>[]>;
+  /** selected explorer id per network */
+  explorer: Record<NetworkId, string>;
   autoLockMinutes: number;
   language: Language;
 }
@@ -135,6 +154,8 @@ export interface IndexerStatus {
   height?: number;
   chain?: string;
   inSync?: boolean;
+  /** round-trip time of the status call */
+  latencyMs?: number;
   /** raw error, localised by the UI */
   error?: unknown;
 }

@@ -26,6 +26,7 @@ import { formatPrl, parsePrl } from './format.ts';
 import { indexerFetch, localStore, sessionStore } from './platform.ts';
 import type {
   AddressRow,
+  Explorer,
   FeeEstimates,
   ImportPreview,
   IndexerStatus,
@@ -66,33 +67,106 @@ export async function lastWalletId(): Promise<string | undefined> {
 
 const DEFAULT_SETTINGS: Settings = {
   indexers: { mainnet: [...NETWORKS.mainnet.blockbook], testnet2: [...NETWORKS.testnet2.blockbook] },
+  customExplorers: { mainnet: [], testnet2: [] },
+  explorer: { mainnet: NETWORKS.mainnet.explorers[0].id, testnet2: NETWORKS.testnet2.explorers[0].id },
   autoLockMinutes: 15,
   language: 'en',
 };
+
+const NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
 
 export async function getSettings(): Promise<Settings> {
   const s = (await localStore.get(K_SETTINGS)) as Partial<Settings> | undefined;
   const clean = (list: unknown, fallback: string[]) =>
     Array.isArray(list) && list.length ? list.filter((u): u is string => typeof u === 'string' && u.startsWith('https://')).slice(0, 8) : fallback;
-  return {
-    indexers: {
-      mainnet: clean(s?.indexers?.mainnet, DEFAULT_SETTINGS.indexers.mainnet),
-      testnet2: clean(s?.indexers?.testnet2, DEFAULT_SETTINGS.indexers.testnet2),
-    },
+  const customs = (id: NetworkId) => {
+    const list = s?.customExplorers?.[id];
+    if (!Array.isArray(list)) return [];
+    // stored data is re-validated on every read
+    return list.flatMap(e => {
+      try {
+        return [{ id: String(e.id), ...checkExplorer(e.name, e.tx, e.address) }];
+      } catch {
+        return [];
+      }
+    }).slice(0, 8);
+  };
+  const out: Settings = {
+    indexers: { mainnet: clean(s?.indexers?.mainnet, DEFAULT_SETTINGS.indexers.mainnet), testnet2: clean(s?.indexers?.testnet2, DEFAULT_SETTINGS.indexers.testnet2) },
+    customExplorers: { mainnet: customs('mainnet'), testnet2: customs('testnet2') },
+    explorer: { ...DEFAULT_SETTINGS.explorer },
     autoLockMinutes: typeof s?.autoLockMinutes === 'number' ? Math.min(Math.max(s.autoLockMinutes, 1), 240) : 15,
     language: s?.language === 'zh-CN' ? 'zh-CN' : 'en',
   };
+  for (const id of NETWORK_IDS) {
+    const wanted = s?.explorer?.[id];
+    if (wanted && explorersFrom(out, id).some(e => e.id === wanted)) out.explorer[id] = wanted;
+  }
+  return out;
 }
 
 export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
   const next = { ...(await getSettings()), ...patch };
-  for (const id of Object.keys(next.indexers) as NetworkId[]) {
+  for (const id of NETWORK_IDS) {
     next.indexers[id] = next.indexers[id].map(u => normalizeIndexerUrl(u));
     if (!next.indexers[id].length) throw new WalletError('indexer.need_one');
   }
   await localStore.set(K_SETTINGS, next);
   indexerCache.clear();
-  return next;
+  return getSettings();
+}
+
+// ---------------------------------------------------------------- explorers
+
+const explorersFrom = (s: Settings, network: NetworkId): Explorer[] => [
+  ...NETWORKS[network].explorers.map(e => ({ ...e, builtin: true })),
+  ...s.customExplorers[network].map(e => ({ ...e, builtin: false })),
+];
+
+export async function listExplorers(network: NetworkId): Promise<{ explorers: Explorer[]; selected: string }> {
+  const s = await getSettings();
+  return { explorers: explorersFrom(s, network), selected: s.explorer[network] };
+}
+
+/** Validates a user-supplied explorer: https only, no credentials, each placeholder exactly once. */
+export function checkExplorer(name: unknown, tx: unknown, address: unknown): { name: string; tx: string; address: string } {
+  const n = typeof name === 'string' ? name.trim().slice(0, 32) : '';
+  if (!n) throw new WalletError('explorer.name_required');
+  const template = (t: unknown, ph: string) => {
+    const v = typeof t === 'string' ? t.trim() : '';
+    if (v.split(ph).length !== 2) throw new WalletError('explorer.bad_template', { placeholder: ph });
+    let url: URL;
+    try {
+      url = new URL(v.replace(ph, 'x'));
+    } catch {
+      throw new WalletError('explorer.bad_template', { placeholder: ph });
+    }
+    if (url.protocol !== 'https:' || url.username || url.password) throw new WalletError('explorer.bad_template', { placeholder: ph });
+    return v;
+  };
+  return { name: n, tx: template(tx, '{txid}'), address: template(address, '{address}') };
+}
+
+export async function addExplorer(network: NetworkId, input: { name: string; tx: string; address: string }): Promise<Settings> {
+  const s = await getSettings();
+  const e = { id: `custom-${crypto.randomUUID()}`, ...checkExplorer(input.name, input.tx, input.address) };
+  s.customExplorers[network] = [...s.customExplorers[network], e];
+  s.explorer[network] = e.id;
+  return setSettings(s);
+}
+
+export async function removeExplorer(network: NetworkId, id: string): Promise<Settings> {
+  const s = await getSettings();
+  s.customExplorers[network] = s.customExplorers[network].filter(e => e.id !== id);
+  if (s.explorer[network] === id) s.explorer[network] = NETWORKS[network].explorers[0].id;
+  return setSettings(s);
+}
+
+export async function selectExplorer(network: NetworkId, id: string): Promise<Settings> {
+  const s = await getSettings();
+  if (!explorersFrom(s, network).some(e => e.id === id)) throw new WalletError('explorer.invalid_target');
+  s.explorer[network] = id;
+  return setSettings(s);
 }
 
 export function normalizeIndexerUrl(u: string): string {
@@ -148,10 +222,12 @@ async function pickIndexer(network: NetworkId): Promise<Blockbook> {
 
 export async function indexerStatus(network: NetworkId, url: string): Promise<IndexerStatus> {
   try {
+    const t0 = performance.now();
     const st = await new Blockbook(url, indexerFetch).status();
+    const latencyMs = Math.round(performance.now() - t0);
     const expected = NETWORKS[network].backendChain;
     const ok = st.chain === expected;
-    return { ok, url, height: st.bestHeight, chain: st.chain, inSync: st.inSync, error: ok ? undefined : new WalletError('indexer.chain_mismatch', { chain: st.chain, expected }) };
+    return { ok, url, latencyMs, height: st.bestHeight, chain: st.chain, inSync: st.inSync, error: ok ? undefined : new WalletError('indexer.chain_mismatch', { chain: st.chain, expected }) };
   } catch (e) {
     return { ok: false, url, error: e };
   }
@@ -160,8 +236,9 @@ export async function indexerStatus(network: NetworkId, url: string): Promise<In
 export async function explorerUrl(network: NetworkId, kind: 'tx' | 'address', value: string): Promise<string> {
   const ok = kind === 'tx' ? /^[0-9a-f]{64}$/.test(value) : isValidAddress(value, NETWORKS[network]);
   if (!ok) throw new WalletError('explorer.invalid_target');
-  const base = (await getSettings()).indexers[network][0];
-  return `${base}/${kind}/${value}`;
+  const s = await getSettings();
+  const ex = explorersFrom(s, network).find(e => e.id === s.explorer[network]) ?? explorersFrom(s, network)[0];
+  return kind === 'tx' ? ex.tx.replace('{txid}', encodeURIComponent(value)) : ex.address.replace('{address}', encodeURIComponent(value));
 }
 
 // ---------------------------------------------------------------- session
@@ -315,6 +392,53 @@ export async function unlock(id: string, password: string): Promise<SessionInfo>
 // ---------------------------------------------------------------- chain data
 
 const coinbaseCache = new Map<string, boolean>();
+
+// Addresses seen paying us from coinbase outputs (mining pools). Public chain facts, kept locally so
+// later payouts are recognised without extra lookups.
+const K_POOLS = 'miningSenders.v1';
+async function knownPools(): Promise<Set<string>> {
+  const v = await localStore.get(K_POOLS);
+  return new Set(Array.isArray(v) ? v.filter((a): a is string => typeof a === 'string').slice(0, 200) : []);
+}
+
+async function isCoinbaseTx(bb: Blockbook, txid: string): Promise<boolean> {
+  let cb = coinbaseCache.get(txid);
+  if (cb === undefined) {
+    cb = isCoinbase(await bb.tx(txid));
+    coinbaseCache.set(txid, cb);
+  }
+  return cb;
+}
+
+const MAX_PAYOUT_LOOKUPS = 12;
+
+/** Marks incoming payments that are funded by coinbase outputs (pool payouts). */
+async function tagPoolPayouts(bb: Blockbook, txs: BBTx[], items: TxItem[], net: PearlNetwork) {
+  const pools = await knownPools();
+  const before = pools.size;
+  let lookups = 0;
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.direction !== 'in' || it.coinbase) continue;
+    const sender = txs[i].vin.find(v => !v.isOwn)?.addresses[0];
+    if (sender && pools.has(sender)) {
+      it.poolPayout = true;
+      continue;
+    }
+    const prev = txs[i].vin[0]?.txid;
+    if (!prev || lookups >= MAX_PAYOUT_LOOKUPS) continue;
+    lookups++;
+    try {
+      if (await isCoinbaseTx(bb, prev)) {
+        it.poolPayout = true;
+        if (sender && isValidAddress(sender, net)) pools.add(sender);
+      }
+    } catch {
+      // best effort: an unreachable lookup just leaves the item as a plain receive
+    }
+  }
+  if (pools.size !== before) await localStore.set(K_POOLS, [...pools].slice(-200));
+}
 const MAX_COINBASE_LOOKUPS = 200;
 
 interface ChainState {
@@ -408,6 +532,7 @@ function toTxItem(t: BBTx, net: PearlNetwork): TxItem {
     confirmations: t.confirmations,
     time: t.blockTime,
     coinbase: isCoinbase(t),
+    poolPayout: false,
     counterparty: cp && isValidAddress(cp, net) ? cp : undefined,
   };
 }
@@ -429,6 +554,13 @@ export async function overview(page = 1): Promise<Overview> {
     }
   }
   const receive = ab.get(EXTERNAL, c.nextReceive);
+  const history = c.x.transactions.map(t => toTxItem(t, net));
+  await tagPoolPayouts(bb, c.x.transactions, history, net);
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const minedToday = history
+    .filter(h => (h.coinbase || h.poolPayout) && h.time * 1000 >= midnight.getTime() && BigInt(h.net) > 0n)
+    .reduce((a, h) => a + BigInt(h.net), 0n);
   return {
     confirmed: confirmed.toString(),
     unconfirmed: unconfirmed.toString(),
@@ -437,13 +569,14 @@ export async function overview(page = 1): Promise<Overview> {
     receiveAddress: receive.address,
     receivePath: `${prefix}/${EXTERNAL}/${c.nextReceive}`,
     txCount: c.x.txs,
-    history: c.x.transactions.map(t => toTxItem(t, net)),
+    history,
     page: c.x.page,
     totalPages: Math.max(c.x.totalPages, 1),
     addresses,
     tip: st.bestHeight,
     indexer: bb.base,
     rejected: c.rejected,
+    minedToday: minedToday.toString(),
     updatedAt: Date.now(),
   };
 }

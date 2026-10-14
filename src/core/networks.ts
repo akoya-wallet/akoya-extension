@@ -7,6 +7,14 @@ export const APP_NAME = 'Akoya';
 
 export type NetworkId = 'mainnet' | 'testnet2';
 
+/** Block explorer link templates; {txid} / {address} are substituted (URL-encoded). */
+export interface ExplorerTemplate {
+  id: string;
+  name: string;
+  tx: string;
+  address: string;
+}
+
 export interface PearlNetwork {
   id: NetworkId;
   label: string;
@@ -23,6 +31,8 @@ export interface PearlNetwork {
   blockbook: string[];
   /** `backend.chain` an indexer must report for this network — never trust a mismatching endpoint */
   backendChain: string;
+  /** built-in explorers; the first is the default */
+  explorers: ExplorerTemplate[];
 }
 
 export const NETWORKS: Record<NetworkId, PearlNetwork> = {
@@ -36,6 +46,10 @@ export const NETWORKS: Record<NetworkId, PearlNetwork> = {
     signerNet: { bech32: 'prl', pubKeyHash: 0x00, scriptHash: 0x05, wif: 0x80 },
     blockbook: ['https://blockbook.pearlresearch.ai'],
     backendChain: 'mainnet',
+    explorers: [
+      { id: 'pearl', name: 'Pearl Explorer', tx: 'https://explorer.pearlresearch.ai/tx/{txid}?network=mainnet', address: 'https://explorer.pearlresearch.ai/address/{address}?network=mainnet' },
+      { id: 'blockbook', name: 'Blockbook', tx: 'https://blockbook.pearlresearch.ai/tx/{txid}', address: 'https://blockbook.pearlresearch.ai/address/{address}' },
+    ],
   },
   testnet2: {
     id: 'testnet2',
@@ -47,6 +61,11 @@ export const NETWORKS: Record<NetworkId, PearlNetwork> = {
     signerNet: { bech32: 'tprl', pubKeyHash: 0x6f, scriptHash: 0xc4, wif: 0xef },
     blockbook: ['https://blockbook.testnet.pearlresearch.ai'],
     backendChain: 'testnet2',
+    // the official explorer serves Testnet2 under network=testnet
+    explorers: [
+      { id: 'pearl', name: 'Pearl Explorer', tx: 'https://explorer.pearlresearch.ai/tx/{txid}?network=testnet', address: 'https://explorer.pearlresearch.ai/address/{address}?network=testnet' },
+      { id: 'blockbook', name: 'Blockbook', tx: 'https://blockbook.testnet.pearlresearch.ai/tx/{txid}', address: 'https://blockbook.testnet.pearlresearch.ai/address/{address}' },
+    ],
   },
 };
 

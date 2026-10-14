@@ -6,12 +6,12 @@ import { WalletError } from '../../core/errors.ts';
 import * as W from '../../ext/wallet.ts';
 import { APP_VERSION, REPO_URL } from '../../ext/app.ts';
 import { openTab, requestOrigin } from '../../ext/platform.ts';
-import type { IndexerStatus, Language, SessionInfo, Settings as S } from '../../ext/types.ts';
+import type { Explorer, IndexerStatus, Language, SessionInfo, Settings as S } from '../../ext/types.ts';
 import { LANGUAGES, useI18n } from '../../i18n/index.tsx';
 import { Btn, Kv, Notice, PasswordField, Topbar, useToast } from '../components/common.tsx';
 import { IconChevron, IconExternal, IconEye, IconLock, IconPlus } from '../components/icons.tsx';
 
-type Sub = null | 'reveal' | 'password' | 'indexers' | 'about' | 'delete' | 'rename';
+type Sub = null | 'reveal' | 'password' | 'indexers' | 'explorers' | 'about' | 'delete' | 'rename';
 
 function Row({ label, value, onClick, danger }: { label: string; value?: string; onClick: () => void; danger?: boolean }) {
   return (
@@ -42,12 +42,17 @@ export function Settings({ session, onBack, onLock, onDeleted, onRenamed }: {
   const { t, lang, setLang } = useI18n();
   const [sub, setSub] = useState<Sub>(null);
   const [settings, setSettings] = useState<S | null>(null);
+  const [explorerName, setExplorerName] = useState('');
   useEffect(() => void W.getSettings().then(setSettings), [sub]);
+  useEffect(() => {
+    void W.listExplorers(session.network).then(r => setExplorerName(r.explorers.find(e => e.id === r.selected)?.name ?? ''));
+  }, [sub, session.network]);
 
   const back = () => setSub(null);
   if (sub === 'reveal') return <Reveal onBack={back} onLocked={onLock} />;
   if (sub === 'password') return <ChangePassword onBack={back} />;
-  if (sub === 'indexers' && settings) return <Indexers settings={settings} onBack={back} />;
+  if (sub === 'indexers' && settings) return <Indexers settings={settings} network={session.network} onBack={back} />;
+  if (sub === 'explorers') return <Explorers network={session.network} onBack={back} />;
   if (sub === 'about') return <About session={session} onBack={back} />;
   if (sub === 'delete') return <Delete session={session} onBack={back} onDeleted={onDeleted} />;
   if (sub === 'rename') return <Rename session={session} onBack={back} onDone={onRenamed} />;
@@ -73,6 +78,7 @@ export function Settings({ session, onBack, onLock, onDeleted, onRenamed }: {
             </select>
           </SelectRow>
           <Row label={t('settings.indexers')} value={settings ? new URL(settings.indexers[session.network][0]).host : ''} onClick={() => setSub('indexers')} />
+          <Row label={t('settings.explorer')} value={explorerName} onClick={() => setSub('explorers')} />
         </div>
 
         <div className="section-title mt-lg">{t('settings.wallet')}</div>
@@ -222,20 +228,40 @@ function ChangePassword({ onBack }: { onBack: () => void }) {
 
 // ------------------------------------------------------------------ indexers
 
-function Indexers({ settings, onBack }: { settings: S; onBack: () => void }) {
+function NetworkTabs({ value, onChange }: { value: NetworkId; onChange: (n: NetworkId) => void }) {
+  return (
+    <div className="seg">
+      {(Object.keys(NETWORKS) as NetworkId[]).map(id => (
+        <button key={id} className={value === id ? 'on' : ''} onClick={() => onChange(id)}>{NETWORKS[id].label}</button>
+      ))}
+    </div>
+  );
+}
+
+function Indexers({ settings, network, onBack }: { settings: S; network: NetworkId; onBack: () => void }) {
   const { t, te } = useI18n();
   const [s, setS] = useState(settings);
-  const [net, setNet] = useState<NetworkId>('mainnet');
+  const [net, setNet] = useState<NetworkId>(network);
   const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<Record<string, IndexerStatus>>({});
   const [error, setError] = useState<string | null>(null);
+  const official = new Set(NETWORKS[net].blockbook);
 
   useEffect(() => {
     for (const u of s.indexers[net]) void W.indexerStatus(net, u).then(r => setStatus(x => ({ ...x, [`${net}|${u}`]: r })));
   }, [s, net]);
 
+  const save = async (list: string[]) => {
+    try {
+      setS(await W.setSettings({ indexers: { ...s.indexers, [net]: list } }));
+    } catch (e) {
+      setError(te(e));
+    }
+  };
   const add = async () => {
     setError(null);
+    setBusy(true);
     try {
       const u = W.normalizeIndexerUrl(url);
       if (s.indexers[net].includes(u)) return setError(t('idx.exists'));
@@ -243,56 +269,123 @@ function Indexers({ settings, onBack }: { settings: S; onBack: () => void }) {
       if (!(await requestOrigin(u))) return setError(t('idx.denied'));
       const st = await W.indexerStatus(net, u);
       if (!st.ok) return setError(st.error ? te(st.error) : t('idx.unavailable'));
-      setS(await W.setSettings({ indexers: { ...s.indexers, [net]: [...s.indexers[net], u] } }));
+      await save([...s.indexers[net], u]);
       setUrl('');
     } catch (e) {
       setError(te(e));
+    } finally {
+      setBusy(false);
     }
   };
-  const remove = async (u: string) => {
-    try {
-      setS(await W.setSettings({ indexers: { ...s.indexers, [net]: s.indexers[net].filter(x => x !== u) } }));
-    } catch (e) {
-      setError(te(e));
-    }
-  };
-  const promote = async (u: string) => setS(await W.setSettings({ indexers: { ...s.indexers, [net]: [u, ...s.indexers[net].filter(x => x !== u)] } }));
 
   return (
     <div className="screen">
       <Topbar title={t('idx.title')} onBack={onBack} />
       <div className="scroll stack">
-        <div className="seg">
-          {(Object.keys(NETWORKS) as NetworkId[]).map(id => (
-            <button key={id} className={net === id ? 'on' : ''} onClick={() => setNet(id)}>{NETWORKS[id].label}</button>
-          ))}
-        </div>
+        <NetworkTabs value={net} onChange={n => { setNet(n); setError(null); }} />
         <div className="list">
           {s.indexers[net].map((u, i) => {
             const st = status[`${net}|${u}`];
+            const active = i === 0;
             return (
-              <div className="item static" key={u}>
+              <div className={`item choice ${active ? 'on' : ''}`} key={u} role="radio" aria-checked={active} tabIndex={0}
+                onClick={() => !active && save([u, ...s.indexers[net].filter(x => x !== u)])}>
+                <span className="radio" />
                 <div className="grow">
-                  <div className="title ellipsis">{new URL(u).host}{i === 0 && <span className="pill" style={{ marginLeft: 6 }}>{t('idx.primary')}</span>}</div>
+                  <div className="title ellipsis">
+                    {new URL(u).host}
+                    {official.has(u) && <span className="pill" style={{ marginLeft: 6 }}>{t('idx.official')}</span>}
+                  </div>
                   <div className="meta">
-                    {!st ? t('idx.checking') : st.ok ? <span className="green">{t('idx.height', { height: st.height?.toLocaleString() ?? '' })} {st.inSync ? '' : t('idx.syncing')}</span> : <span className="red">{te(st.error)}</span>}
+                    {!st ? t('idx.checking')
+                      : st.ok ? <span className="green">{t('idx.height', { height: st.height?.toLocaleString() ?? '' })} · {t('idx.latency', { ms: st.latencyMs ?? 0 })} {st.inSync ? '' : t('idx.syncing')}</span>
+                      : <span className="red">{te(st.error)}</span>}
                   </div>
                 </div>
-                {i > 0 && <button className="btn sm" onClick={() => promote(u)}>{t('idx.make_primary')}</button>}
-                {s.indexers[net].length > 1 && <button className="btn sm danger" onClick={() => remove(u)}>{t('idx.remove')}</button>}
+                {active && <span className="tiny accent-text">{t('idx.active')}</span>}
+                {!official.has(u) && s.indexers[net].length > 1 && (
+                  <button className="btn sm danger" onClick={e => { e.stopPropagation(); void save(s.indexers[net].filter(x => x !== u)); }}>{t('idx.remove')}</button>
+                )}
               </div>
             );
           })}
         </div>
+        <p className="tiny faint" style={{ margin: 0 }}>{t('idx.tap_hint')}</p>
         <div className="field">
           <label>{t('idx.add_label')}</label>
           <div className="row">
-            <input className="input" value={url} placeholder="https://your-blockbook.example" onChange={e => setUrl(e.target.value)} />
-            <Btn className="sm" style={{ height: 44 }} disabled={!url} onClick={add}><IconPlus /></Btn>
+            <input className="input" value={url} placeholder="https://your-blockbook.example" onChange={e => setUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && url && add()} />
+            <Btn className="sm" style={{ height: 44 }} disabled={!url} loading={busy} onClick={add}><IconPlus />{t('idx.add')}</Btn>
           </div>
         </div>
         {error && <Notice kind="danger">{error}</Notice>}
         <Notice kind="info">{t('idx.notice', { chain: NETWORKS[net].backendChain })}</Notice>
+      </div>
+    </div>
+  );
+}
+
+function Explorers({ network, onBack }: { network: NetworkId; onBack: () => void }) {
+  const { t, te } = useI18n();
+  const [net, setNet] = useState<NetworkId>(network);
+  const [data, setData] = useState<{ explorers: Explorer[]; selected: string } | null>(null);
+  const [form, setForm] = useState({ name: '', tx: '', address: '' });
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = () => void W.listExplorers(net).then(setData);
+  useEffect(reload, [net]);
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setError(null);
+    try {
+      await fn();
+      reload();
+    } catch (e) {
+      setError(te(e));
+    }
+  };
+
+  return (
+    <div className="screen">
+      <Topbar title={t('exp.title')} onBack={onBack} />
+      <div className="scroll stack">
+        <NetworkTabs value={net} onChange={n => { setNet(n); setError(null); }} />
+        <div className="list">
+          {data?.explorers.map(ex => {
+            const active = ex.id === data.selected;
+            return (
+              <div className={`item choice ${active ? 'on' : ''}`} key={ex.id} role="radio" aria-checked={active} tabIndex={0}
+                onClick={() => !active && act(() => W.selectExplorer(net, ex.id))}>
+                <span className="radio" />
+                <div className="grow">
+                  <div className="title ellipsis">
+                    {ex.name}
+                    {ex.builtin && <span className="pill" style={{ marginLeft: 6 }}>{t('idx.official')}</span>}
+                  </div>
+                  <div className="meta ellipsis">{new URL(ex.tx.replace('{txid}', 'x')).host}</div>
+                </div>
+                {active && <span className="tiny accent-text">{t('idx.active')}</span>}
+                {!ex.builtin && (
+                  <button className="btn sm danger" onClick={e => { e.stopPropagation(); void act(() => W.removeExplorer(net, ex.id)); }}>{t('idx.remove')}</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <p className="tiny faint" style={{ margin: 0 }}>{t('exp.hint')}</p>
+
+        <div className="card stack">
+          <div className="label">{t('exp.add_title')}</div>
+          <input className="input" value={form.name} maxLength={32} placeholder={t('exp.name_ph')} aria-label={t('exp.name')} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          <input className="input mono-input" value={form.tx} placeholder="https://…/tx/{txid}" aria-label={t('exp.tx')} onChange={e => setForm(f => ({ ...f, tx: e.target.value }))} />
+          <input className="input mono-input" value={form.address} placeholder="https://…/address/{address}" aria-label={t('exp.address')} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+          <span className="hint">{t('exp.placeholders')}</span>
+          <Btn className="sm" disabled={!form.name || !form.tx || !form.address}
+            onClick={() => act(async () => { await W.addExplorer(net, form); setForm({ name: '', tx: '', address: '' }); })}>
+            <IconPlus />{t('exp.add')}
+          </Btn>
+        </div>
+        {error && <Notice kind="danger">{error}</Notice>}
       </div>
     </div>
   );

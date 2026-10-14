@@ -99,6 +99,7 @@ body.tab #root { width: 400px; height: 660px; border-radius: 22px; border: 1px s
 .hero-chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
 .chip { font-size: 11px; line-height: 1; padding: 5px 9px; border-radius: 999px; background: var(--surface); color: var(--muted); white-space: nowrap; }
 .chip.amber { background: rgba(255, 196, 107, 0.12); color: var(--amber); }
+.chip.mined { background: rgba(79, 209, 161, 0.12); color: var(--green); }
 .chip.accent { background: rgba(197, 193, 253, 0.12); color: var(--accent); }
 .balance { padding: 18px 0 6px; text-align: center; }
 .balance .amount { font-size: 36px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
@@ -229,3 +230,12 @@ body.tab #root { width: 400px; height: 660px; border-radius: 22px; border: 1px s
 .own-chip.on { border-color: var(--accent); background: rgba(197, 193, 253, 0.12); }
 .avatar.xs { width: 20px; height: 20px; font-size: 10px; }
 .own-tag { display: inline-block; margin-top: 6px; font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(79, 209, 161, 0.12); color: var(--green); }
+
+/* ---------- radio-style choice lists (RPC nodes, explorers) ---------- */
+.item.choice { cursor: pointer; border: 1px solid transparent; }
+.item.choice.on { border-color: rgba(197, 193, 253, 0.45); background: rgba(197, 193, 253, 0.06); }
+.item .radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--faint); flex-shrink: 0; position: relative; }
+.item.choice.on .radio { border-color: var(--accent); }
+.item.choice.on .radio::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--accent); }
+.accent-text { color: var(--accent); white-space: nowrap; }
+.mono-input { font-family: var(--mono); font-size: 12px; }

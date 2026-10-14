@@ -234,6 +234,7 @@ function BalanceHero({ ov }: { ov: Overview | null }) {
   }, [full]);
   const unconfirmed = ov ? BigInt(ov.unconfirmed) : 0n;
   const immature = ov ? BigInt(ov.immature) : 0n;
+  const minedToday = ov ? BigInt(ov.minedToday) : 0n;
   return (
     <div className="balance-hero">
       {ov ? (
@@ -245,8 +246,9 @@ function BalanceHero({ ov }: { ov: Overview | null }) {
       ) : (
         <div className="skeleton" style={{ height: 48, width: 220, margin: '0 auto' }} />
       )}
-      {(unconfirmed !== 0n || immature > 0n) && (
+      {(unconfirmed !== 0n || immature > 0n || minedToday > 0n) && (
         <div className="hero-chips">
+          {minedToday > 0n && <span className="chip mined">{t('home.mined_today', { amount: formatPrl(minedToday, { sign: true, maxDecimals: 4 }) })}</span>}
           {unconfirmed !== 0n && <span className="chip accent">{t('home.pending_chip', { amount: formatPrl(unconfirmed, { sign: true, maxDecimals: 4 }) })}</span>}
           {immature > 0n && <span className="chip amber">{t('home.immature_chip', { amount: formatPrl(immature, { maxDecimals: 4 }) })}</span>}
         </div>
@@ -289,8 +291,10 @@ function TxList({ items, session }: { items?: TxItem[]; session: SessionInfo }) 
           <div className="list tight">
             {g.items.map(tx => {
               const n = BigInt(tx.net);
-              const kind = tx.coinbase ? 'mine' : tx.direction === 'in' ? 'in' : tx.direction === 'out' ? 'out' : '';
-              const label = tx.coinbase ? t('tx.mined') : tx.direction === 'in' ? t('tx.received') : tx.direction === 'out' ? t('tx.sent') : t('tx.self');
+              const mined = tx.coinbase || tx.poolPayout;
+              const kind = mined ? 'mine' : tx.direction === 'in' ? 'in' : tx.direction === 'out' ? 'out' : '';
+              const label = tx.coinbase ? t('tx.mined') : tx.poolPayout ? t('tx.pool_payout') : tx.direction === 'in' ? t('tx.received') : tx.direction === 'out' ? t('tx.sent') : t('tx.self');
+              const sub = tx.counterparty ? shortAddr(tx.counterparty, net) : shortTxid(tx.txid);
               const status =
                 tx.confirmations === 0 ? <span className="amber">{t('common.pending')}</span>
                 : tx.coinbase && tx.confirmations < 100 ? <span className="amber">{t('tx.confirmations', { n: tx.confirmations })}</span>
@@ -298,11 +302,11 @@ function TxList({ items, session }: { items?: TxItem[]; session: SessionInfo }) 
               return (
                 <button key={tx.txid} className="item" onClick={() => open(tx.txid)} title={`${formatPrl(n, { sign: true })} PRL · ${tx.txid}`}>
                   <span className={`tx-ic ${kind}`}>
-                    {tx.coinbase ? <IconPick /> : tx.direction === 'in' ? <IconArrowDown /> : <IconArrowUp />}
+                    {mined ? <IconPick /> : tx.direction === 'in' ? <IconArrowDown /> : <IconArrowUp />}
                   </span>
                   <div className="grow">
                     <div className="title">{label}</div>
-                    <div className="meta ellipsis">{tx.counterparty ? shortAddr(tx.counterparty, net) : shortTxid(tx.txid)}</div>
+                    <div className="meta ellipsis">{tx.poolPayout && tx.counterparty ? t('tx.via_pool', { addr: sub }) : sub}</div>
                   </div>
                   <div className="right">
                     <div className={`amt ${n > 0n ? 'green' : ''}`}>

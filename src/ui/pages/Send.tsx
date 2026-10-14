@@ -5,7 +5,7 @@ import { estimateVsize } from '../../core/tx.ts';
 import * as W from '../../ext/wallet.ts';
 import { openTab } from '../../ext/platform.ts';
 import { formatPrl, parsePrl, shortTxid } from '../../ext/format.ts';
-import type { FeeEstimates, Overview, SendPreview, SessionInfo } from '../../ext/types.ts';
+import type { FeeEstimates, Overview, OwnRecipient, SendPreview, SessionInfo } from '../../ext/types.ts';
 import { useI18n, type MsgKey } from '../../i18n/index.tsx';
 import { Btn, FullAddress, Kv, Notice, PasswordField, Topbar, useCopy } from '../components/common.tsx';
 import { IconCheck, IconCopy, IconExternal } from '../components/icons.tsx';
@@ -27,6 +27,7 @@ export function Send({ session, onBack, onLocked }: { session: SessionInfo; onBa
   const [level, setLevel] = useState<Level>('normal');
   const [custom, setCustom] = useState('');
   const [ov, setOv] = useState<Overview | null>(null);
+  const [own, setOwn] = useState<OwnRecipient[]>([]);
   const [preview, setPreview] = useState<SendPreview | null>(null);
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
@@ -37,6 +38,7 @@ export function Send({ session, onBack, onLocked }: { session: SessionInfo; onBa
   useEffect(() => {
     W.fees().then(setFees, e => (e instanceof W.LockedError ? onLocked() : setError(te(e))));
     W.overview().then(setOv, () => {});
+    W.ownRecipients().then(setOwn, () => {});
   }, [onLocked, te]);
 
   const feeRate = useMemo(() => {
@@ -54,6 +56,7 @@ export function Send({ session, onBack, onLocked }: { session: SessionInfo; onBa
     }
   }
   const addrOk = toTrim ? !addrErr : null;
+  const ownMatch = own.find(o => o.address === toTrim.toLowerCase());
   let amountErr: string | null = null;
   let amountGrains = 0n;
   if (!max && amount) {
@@ -65,7 +68,7 @@ export function Send({ session, onBack, onLocked }: { session: SessionInfo; onBa
   }
   const spendable = ov ? BigInt(ov.spendable) : null;
   const roughFee = BigInt(Math.ceil(estimateVsize(2, 2) * feeRate));
-  if (!amountErr && spendable !== null && !max && amountGrains + roughFee > spendable) amountErr = t('send.insufficient_hint');
+  if (!amountErr && spendable !== null && !max && amountGrains > 0n && amountGrains + roughFee > spendable) amountErr = t('send.insufficient_hint');
   const canReview = addrOk && (max || (amountGrains > 0n && !amountErr)) && feeRate >= 1;
 
   const review = async () => {
@@ -135,6 +138,9 @@ export function Send({ session, onBack, onLocked }: { session: SessionInfo; onBa
           </div>
           <div className="card">
             <div className="label">{t('send.recipient_type', { type: preview.addressType === 'taproot' ? t('send.type_taproot') : t('send.type_p2mr') })}</div>
+            {own.find(o => o.address === preview.to) && (
+              <div className="own-tag">{t('send.recipient_own', { name: own.find(o => o.address === preview.to)!.name })}</div>
+            )}
             <div className="mt"><FullAddress address={preview.to} hrp={preview.hrp} /></div>
           </div>
           <div className="card tight">
@@ -192,7 +198,18 @@ export function Send({ session, onBack, onLocked }: { session: SessionInfo; onBa
             onChange={e => setTo(e.target.value.replace(/\s/g, ''))}
           />
           {addrErr && <span className="hint err">{addrErr}</span>}
-          {addrOk && <span className="hint ok">{t('send.address_ok')}</span>}
+          {addrOk && <span className="hint ok">{ownMatch ? t('send.to_own', { name: ownMatch.name }) : t('send.address_ok')}</span>}
+          {own.length > 0 && (
+            <div className="own-chips" aria-label={t('send.my_wallets')}>
+              <span className="tiny faint">{t('send.my_wallets')}</span>
+              {own.map(o => (
+                <button key={o.walletId} className={`own-chip ${ownMatch?.walletId === o.walletId ? 'on' : ''}`} onClick={() => setTo(o.address)} title={o.address}>
+                  <span className="avatar xs">{(o.name.trim()[0] ?? 'A').toUpperCase()}</span>
+                  <span className="ellipsis">{o.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="field">
           <div className="row between">
@@ -231,7 +248,7 @@ export function Send({ session, onBack, onLocked }: { session: SessionInfo; onBa
           {level === 'custom' && (
             <input className="input" inputMode="decimal" placeholder={t('send.custom_ph')} value={custom} onChange={e => setCustom(e.target.value.replace(/[^\d.]/g, ''))} />
           )}
-          <span className="hint">{t('send.fee_hint', { rate: feeRate, fee: formatPrl(roughFee) })}</span>
+          <span className="hint" title={t('send.fee_targets')}>{t('send.fee_hint', { rate: feeRate, fee: formatPrl(roughFee) })}</span>
         </div>
         {error && <Notice kind="danger">{error}</Notice>}
       </div>

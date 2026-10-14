@@ -34,7 +34,7 @@ const DEV_REWRITE: Record<string, string> = {
 
 /** fetch for indexer calls; in `vite dev` the default indexers go through the dev proxy */
 export const indexerFetch = (url: string, init?: RequestInit): Promise<Response> => {
-  if (!hasChrome && import.meta.env.DEV) {
+  if (!hasChrome && import.meta.env?.DEV) {
     for (const [from, to] of Object.entries(DEV_REWRITE)) if (url.startsWith(from)) return fetch(to + url.slice(from.length), init);
   }
   return fetch(url, init);

@@ -34,6 +34,7 @@ import type {
   SeedCheck,
   SendDraft,
   SendPreview,
+  OwnRecipient,
   SessionInfo,
   Settings,
   TxItem,
@@ -284,6 +285,7 @@ export async function createWallet(args: SeedArgs & { name: string; password: st
   const vault = await readVault();
   const name = args.name.trim().slice(0, 32) || `Wallet ${vault.length + 1}`;
   const entry = await encryptWallet({ name, network: args.network, mode: args.mode }, { secret: p.normalized, passphrase: args.passphrase }, args.password);
+  entry.xpub = xpub;
   await writeVault([...vault, entry]);
   return start(entry, xpub);
 }
@@ -298,6 +300,15 @@ export async function unlock(id: string, password: string): Promise<SessionInfo>
   const entry = await entryById(id);
   const secret = await decryptWallet(entry, password);
   const { xpub } = await xpubFor(secret.secret, secret.passphrase, entry.network, entry.mode);
+  if (entry.xpub !== xpub) {
+    // backfill for older entries, and repair if the clear-text copy was ever altered
+    const vault = await readVault();
+    const e = vault.find(x => x.id === id);
+    if (e) {
+      e.xpub = xpub;
+      await writeVault(vault);
+    }
+  }
   return start(entry, xpub);
 }
 
@@ -447,6 +458,41 @@ export async function fees(): Promise<FeeEstimates> {
   return { fast: clampFee(fast), normal: clampFee(normal), slow: clampFee(slow) };
 }
 
+/**
+ * Your other wallets on the same network, each with its next unused receive address, so the send
+ * screen can offer them as one-tap recipients. Addresses are derived locally from the stored xpub;
+ * the indexer is only asked which index is next.
+ */
+export async function ownRecipients(): Promise<OwnRecipient[]> {
+  const s = await requireSession();
+  const net = NETWORKS[s.network];
+  const others = (await readVault()).filter(e => e.id !== s.walletId && e.network === s.network && e.xpub);
+  if (!others.length) return [];
+  const bb = await indexer(s.network).catch(() => null);
+  const prefix = accountPathString(net);
+  const out = await Promise.all(
+    others.map(async (e): Promise<OwnRecipient | null> => {
+      try {
+        const book = new AddressBook(e.xpub!, net);
+        let next = 0;
+        if (bb) {
+          const x = await bb.xpub(`tr(${e.xpub})`, { page: 1, pageSize: 1 });
+          for (const t of x.tokens) {
+            const p = parseTokenPath(t.path, prefix);
+            if (p && p.branch === EXTERNAL && p.index <= MAX_ADDRESS_INDEX && t.transfers > 0 && book.get(EXTERNAL, p.index).address === t.address) {
+              next = Math.max(next, p.index + 1);
+            }
+          }
+        }
+        return { walletId: e.id, name: e.name, address: book.get(EXTERNAL, next).address };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return out.filter((r): r is OwnRecipient => r !== null);
+}
+
 // ---------------------------------------------------------------- send
 
 interface Draft {
@@ -561,7 +607,7 @@ export async function changePassword(oldPassword: string, newPassword: string) {
   const vault = await readVault();
   const i = vault.findIndex(e => e.id === s.walletId);
   if (i < 0) throw new WalletError('wallet.not_found');
-  vault[i] = await reencryptWallet(vault[i], oldPassword, newPassword);
+  vault[i] = { ...(await reencryptWallet(vault[i], oldPassword, newPassword)), xpub: vault[i].xpub };
   await writeVault(vault);
 }
 

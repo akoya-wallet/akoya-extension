@@ -10,6 +10,12 @@ updates:
     groups:
       dev-tooling:
         dependency-type: development
+        update-types: [minor, patch]
+    # Major upgrades change build output and transitive licences (e.g. Vite 8 → lightningcss, MPL-2.0);
+    # they are evaluated by hand, not proposed automatically.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
     labels: [dependencies]
   - package-ecosystem: github-actions
     directory: /

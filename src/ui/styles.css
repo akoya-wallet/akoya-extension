@@ -221,3 +221,11 @@ body.tab #root { width: 400px; height: 660px; border-radius: 22px; border: 1px s
 
 .section-title.mt-lg { margin-top: 22px; }
 .section-title.mt { margin-top: 12px; }
+
+/* ---------- send: own-wallet shortcuts ---------- */
+.own-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
+.own-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 150px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+.own-chip:hover { background: var(--surface-2); }
+.own-chip.on { border-color: var(--accent); background: rgba(197, 193, 253, 0.12); }
+.avatar.xs { width: 20px; height: 20px; font-size: 10px; }
+.own-tag { display: inline-block; margin-top: 6px; font-size: 11px; padding: 3px 8px; border-radius: 999px; background: rgba(79, 209, 161, 0.12); color: var(--green); }

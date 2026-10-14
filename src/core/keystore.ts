@@ -1,7 +1,8 @@
 // Encrypted vault entry. Password -> Argon2id (@noble/hashes) -> AES-256-GCM (WebCrypto).
 // Works in extension pages, service workers and Node (globalThis.crypto).
-// Nothing about the wallet — secret, passphrase, xpub — is readable without the password;
-// only name/network/mode stay in clear so the wallet picker can render.
+// The secret and passphrase are only readable with the password. In clear: name, network, mode and
+// the account xpub (public — it can derive addresses but never spend), so the wallet list can render
+// and your other wallets can be offered as recipients. The xpub is re-derived and corrected on unlock.
 
 import { argon2idAsync } from '@noble/hashes/argon2.js';
 import { base64 } from '@scure/base';
@@ -31,6 +32,8 @@ export interface VaultEntry {
   createdAt: string;
   kdf: { name: 'argon2id'; salt: string } & KdfParams;
   cipher: { name: 'AES-GCM'; iv: string; data: string };
+  /** public account key (m/86'/coin'/0'); not secret, verified against the seed on every unlock */
+  xpub?: string;
 }
 
 /** RFC 9106 §4 second recommended option, with p=1 for single-threaded JS. */

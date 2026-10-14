@@ -83,6 +83,13 @@ export interface Overview {
   updatedAt: number;
 }
 
+export interface OwnRecipient {
+  walletId: string;
+  name: string;
+  /** next unused receive address of that wallet */
+  address: string;
+}
+
 export interface FeeEstimates {
   fast: number | null;
   normal: number | null;

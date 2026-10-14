@@ -5,7 +5,7 @@
 1. **Mnemonic / seed / private keys** — total loss if disclosed.
 2. **Vault password** — unlocks (1) on this device.
 3. **Transaction intent** — recipient, amount, fee the user approved.
-4. **Privacy** — the account xpub reveals every address and balance.
+4. **Privacy** — the account xpub reveals every address and balance. It is stored in clear (like MetaMask/Phantom store account addresses), so someone with access to the browser profile can see balances and history — but cannot move funds.
 
 ## Where key material lives
 
@@ -13,6 +13,7 @@
 |---|---|---|
 | At rest | `chrome.storage.local` | Argon2id (64 MiB, t=3) → AES-256-GCM; id/network/mode bound as AAD |
 | Unlocked session | `chrome.storage.session` (memory-only, trusted contexts) | **xpub + wallet id only**, no private material |
+| Wallet list | `chrome.storage.local` | name, network, derivation mode and the **account xpub in clear** — public, cannot spend; used to list wallets and offer your other wallets as recipients. Re-derived from the seed and corrected on every unlock. |
 | Signing / backup | extension page memory | decrypted on demand, private keys zeroed after `signIdx`, HD nodes wiped |
 
 The password is required for every send and every mnemonic reveal. JS strings (the mnemonic

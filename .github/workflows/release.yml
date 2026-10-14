@@ -62,7 +62,10 @@ jobs:
         run: |
           m="$(node -p "require('./public/manifest.json').version")"
           p="$(node -p "require('./package.json').version")"
-          test "v$m" = "$GITHUB_REF_NAME" && test "$m" = "$p" || { echo "tag $GITHUB_REF_NAME, manifest $m, package $p"; exit 1; }
+          if [ "v$m" != "$GITHUB_REF_NAME" ] || [ "$m" != "$p" ]; then
+            echo "tag $GITHUB_REF_NAME, manifest $m, package $p" >&2
+            exit 1
+          fi
 
       - run: npm ci
       - run: npm run build

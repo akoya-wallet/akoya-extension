@@ -44,7 +44,16 @@ export default defineConfig({
     sourcemap: false,
     target: 'chrome120',
     modulePreload: { polyfill: false },
-    rollupOptions: { input: { popup: 'popup.html' } },
+    // Loaded from the extension package, not the network — a single ~500 kB chunk is fine.
+    chunkSizeWarningLimit: 1024,
+    rollupOptions: {
+      input: { popup: 'popup.html' },
+      onwarn(warning, warn) {
+        // @scure/base ships a /* @__PURE__ */ comment Rollup can't place; it is dropped harmlessly.
+        if (warning.code === 'INVALID_ANNOTATION' && warning.id?.includes('/node_modules/@scure/base/')) return;
+        warn(warning);
+      },
+    },
   },
   server: { port: 5199, strictPort: true },
 });

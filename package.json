@@ -21,7 +21,8 @@
     "test": "node --test test/*.test.ts",
     "test:vectors": "node --test test/derivation.test.ts",
     "security:gates": "bash scripts/security-gates.sh",
-    "package": "npm run build && bash scripts/package.sh"
+    "package": "npm run build && bash scripts/package.sh",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "@noble/curves": "2.4.0",

@@ -96,6 +96,7 @@ npm run dev
 | `npm run typecheck` | strict TypeScript |
 | `npm run security:gates` | key-leak / weak-RNG / eval / raw-HTML gates |
 | `npm run package` | build + `release/akoya-<ver>.zip` + SHA-256 |
+| `npm run release -- X.Y.Z` | bump version, run checks, commit, tag and push → CI publishes the release |
 
 ```
 src/core/      protocol layer — pure TS, no browser or network deps, tested in Node

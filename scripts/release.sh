@@ -21,6 +21,18 @@ git fetch -q origin main --tags
 [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] || { echo "local main differs from origin/main — pull/push first" >&2; exit 1; }
 if git rev-parse -q --verify "refs/tags/v$v" >/dev/null; then echo "tag v$v already exists" >&2; exit 1; fi
 
+# All checks run before anything is modified, so a failure leaves the tree untouched.
+npm run typecheck
+npm test
+bash scripts/security-gates.sh
+npm run check:supply-chain
+
+rollback() {
+  git checkout -- package.json package-lock.json public/manifest.json
+  echo "✖ release aborted — version bump rolled back" >&2
+}
+trap rollback ERR
+
 npm version "$v" --no-git-tag-version >/dev/null
 node -e '
   const fs = require("fs");
@@ -29,12 +41,9 @@ node -e '
   fs.writeFileSync("public/manifest.json", JSON.stringify(m, null, 2) + "\n");
 ' "$v"
 
-npm run typecheck
-npm test
-bash scripts/security-gates.sh
-
 git add package.json package-lock.json public/manifest.json
 git commit -q -m "release: v$v"
+trap - ERR # committed: from here on, report instead of rolling back
 git tag -a "v$v" -m "Akoya v$v"
 git push origin main "v$v"
 echo "✔ v$v pushed — release workflow: https://github.com/akoya-wallet/akoya-extension/actions/workflows/release.yml"

@@ -82,11 +82,18 @@ test('fuzz: formatPrl with maxDecimals never rounds up', () => {
   );
 });
 
-test('fuzz: parseSeed never throws and never echoes input words in its reason', () => {
+const SEED_CODES = new Set(['seed.empty', 'seed.hex_odd', 'seed.hex_length', 'seed.format', 'seed.word_count', 'seed.unknown_word', 'seed.checksum']);
+
+test('fuzz: parseSeed never throws and its reason cannot carry user input', () => {
+  // The precise property: a fixed code plus numeric params only (word count / position) —
+  // so no part of a typed recovery phrase can end up in an error message.
   fc.assert(
     fc.property(fc.array(fc.stringMatching(/^[a-z]{3,10}$/), { minLength: 1, maxLength: 26 }), words => {
       const r = parseSeed(words.join(' '));
-      if (r.kind === 'invalid') assert.ok(!words.some(w => JSON.stringify(r.reason).includes(w)));
+      if (r.kind === 'invalid') {
+        assert.ok(SEED_CODES.has(r.reason.code), r.reason.code);
+        for (const v of Object.values(r.reason.params ?? {})) assert.equal(typeof v, 'number');
+      }
     }),
     RUNS,
   );

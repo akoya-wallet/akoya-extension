@@ -3,7 +3,7 @@
   "name": "Akoya — Pearl (PRL) Wallet",
   "short_name": "Akoya",
   "description": "Open-source self-custody wallet for Pearl (PRL) by PRLFlipBTC. Not affiliated with Pearl Research Labs.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "homepage_url": "https://github.com/akoya-wallet/akoya-extension",
   "minimum_chrome_version": "120",
   "icons": {

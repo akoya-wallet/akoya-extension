@@ -1,5 +1,11 @@
 {
-  "appName": { "message": "Akoya — Pearl (PRL) Wallet" },
-  "appShortName": { "message": "Akoya" },
-  "appDesc": { "message": "Open-source self-custody wallet for Pearl (PRL) by PRLFlipBTC. Not affiliated with Pearl Research Labs." }
+  "appName": {
+    "message": "Akoya — Pearl (PRL) Wallet"
+  },
+  "appShortName": {
+    "message": "Akoya"
+  },
+  "appDesc": {
+    "message": "Open-source self-custody wallet for Pearl (PRL). Your keys never leave your device. Not affiliated with Pearl Research Labs."
+  }
 }

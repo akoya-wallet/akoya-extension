@@ -1,8 +1,8 @@
 /* tslint:disable */
 /* eslint-disable */
-export function firstNames(address: string): string[];
 export function addressOf(public_key: Uint8Array): string;
 export function masterPublicKey(seed: Uint8Array): Uint8Array;
+export function firstNames(address: string): string[];
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -13,8 +13,8 @@ export interface InitOutput {
   readonly masterPublicKey: (a: number, b: number, c: number) => void;
   readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
   readonly __wbindgen_export: (a: number, b: number) => number;
-  readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
-  readonly __wbindgen_export3: (a: number, b: number, c: number) => void;
+  readonly __wbindgen_export2: (a: number, b: number, c: number) => void;
+  readonly __wbindgen_export3: (a: number, b: number, c: number, d: number) => number;
 }
 
 export type SyncInitInput = BufferSource | WebAssembly.Module;

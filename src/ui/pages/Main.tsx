@@ -345,7 +345,7 @@ function PnlSheet({ view, onClose }: { view: PnlView; onClose: () => void }) {
           </div>
         </div>
         {view.partial && <Notice kind="warn">{t('pnl.partial')}</Notice>}
-        <div className="card tight">
+        <div className="card tight pnl-kv">
           <Kv k={<>{t('pnl.price')}<div className="tiny faint">{t('pnl.price_hint')}</div></>}>
             <span className={`nowrap ${tone(view.pnlPrice)}`}>{f(view.pnlPrice, true)}</span>
           </Kv>
@@ -353,7 +353,7 @@ function PnlSheet({ view, onClose }: { view: PnlView; onClose: () => void }) {
             <span className={`nowrap ${tone(view.pnlMined)}`}>{f(view.pnlMined, true)}</span>
           </Kv>
         </div>
-        <div className="card tight">
+        <div className="card tight pnl-kv">
           <Kv k={t('pnl.value_now')}><span className="nowrap">{f(view.valueNow)}</span></Kv>
           <Kv k={t('pnl.price_now')}>
             <span className="nowrap">{price(view.price)}</span>

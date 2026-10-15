@@ -109,6 +109,8 @@ body.tab #root { width: 400px; height: 660px; border-radius: 22px; border: 1px s
 .pnl-head { text-align: center; padding: 2px 0 4px; }
 .flip-bar { width: 84px; height: 4px; border-radius: 2px; background: var(--surface-3); margin: 5px 0 0 auto; overflow: hidden; }
 .flip-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.pnl-kv .kv .k { flex-shrink: 1; min-width: 0; }
+.pnl-kv .kv .v { flex-shrink: 0; }
 .pnl-big { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
 .chip { font-size: 11px; line-height: 1; padding: 5px 9px; border-radius: 999px; background: var(--surface); color: var(--muted); white-space: nowrap; }
 .chip.amber { background: rgba(255, 196, 107, 0.12); color: var(--amber); }

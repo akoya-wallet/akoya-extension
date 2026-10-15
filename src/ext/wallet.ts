@@ -26,6 +26,7 @@ import { dailyPnl, localDay } from '../core/pnl.ts';
 import { formatPrl, parsePrl } from './format.ts';
 import { indexerFetch, localStore, sessionStore } from './platform.ts';
 import { FIATS, priceAt, spot } from './price.ts';
+import { fetchPoolStats, poolById, type PoolStats } from './pool.ts';
 import type {
   AddressRow,
   Explorer,
@@ -36,6 +37,7 @@ import type {
   Overview,
   PnlDay,
   PnlView,
+  PoolConfig,
   SeedArgs,
   SeedCheck,
   SendDraft,
@@ -52,6 +54,8 @@ const K_SETTINGS = 'settings.v1';
 const K_SESSION = 'session.v1';
 const K_LAST = 'lastWallet.v1';
 const K_PNL = 'pnl.v1';
+const K_POOL = 'pool.v1';
+const K_PAYOUT_ADDRS = 'payoutAddrs.v1';
 const K_PRICE_OPEN = 'priceOpen.v1';
 
 // ---------------------------------------------------------------- vault & settings
@@ -570,6 +574,15 @@ export async function overview(page = 1): Promise<Overview> {
   const today = await todaysTxs(s, bb, c.x, history);
   const minedToday = today.items.filter(h => (h.coinbase || h.poolPayout) && BigInt(h.net) > 0n).reduce((a, h) => a + BigInt(h.net), 0n);
   const netToday = today.items.reduce((a, h) => a + BigInt(h.net), 0n);
+  // which of our addresses the mining income goes to (only addresses that passed local derivation)
+  const own = new Set(addresses.map(a => a.address));
+  const hits = new Map<string, number>();
+  history.forEach((h, i) => {
+    if (!(h.coinbase || h.poolPayout)) return;
+    for (const o of c.x.transactions[i].vout) if (o.isOwn && o.addresses[0] && own.has(o.addresses[0])) hits.set(o.addresses[0], (hits.get(o.addresses[0]) ?? 0) + 1);
+  });
+  const payoutAddresses = [...hits].sort((a, b) => b[1] - a[1]).map(([a]) => a).slice(0, 5);
+  if (payoutAddresses.length) await sessionStore.set(K_PAYOUT_ADDRS, { walletId: s.walletId, addresses: payoutAddresses });
   return {
     confirmed: confirmed.toString(),
     unconfirmed: unconfirmed.toString(),
@@ -588,6 +601,7 @@ export async function overview(page = 1): Promise<Overview> {
     minedToday: minedToday.toString(),
     netToday: netToday.toString(),
     todayComplete: today.complete,
+    payoutAddresses,
     updatedAt: Date.now(),
   };
 }
@@ -686,6 +700,61 @@ export async function pnlToday(o: Overview): Promise<PnlView | 'off' | 'unsuppor
     await localStore.set(K_PNL, log);
   }
   return view;
+}
+
+// ---------------------------------------------------------------- mining pool
+//
+// Opt-in, per wallet (Settings → Mining pool, or the suggestion on the home screen of a wallet that
+// receives mining income). Only the mining address is sent, and only to the chosen pool.
+
+type PoolLink = { pool?: string; address?: string; dismissed?: boolean };
+
+async function readPoolLinks(): Promise<Record<string, PoolLink>> {
+  const v = await localStore.get(K_POOL);
+  return v && typeof v === 'object' ? (v as Record<string, PoolLink>) : {};
+}
+
+export async function poolConfig(): Promise<PoolConfig> {
+  const s = await requireSession();
+  const link = (await readPoolLinks())[s.walletId] ?? {};
+  const net = NETWORKS[s.network];
+  // stored data is re-validated on every read
+  const pool = link.pool && poolById(link.pool) && link.address && isValidAddress(link.address, net) ? link.pool : null;
+  const seen = (await sessionStore.get(K_PAYOUT_ADDRS)) as { walletId?: string; addresses?: unknown } | undefined;
+  const detected = seen?.walletId === s.walletId && Array.isArray(seen.addresses) ? seen.addresses.filter((a): a is string => typeof a === 'string' && isValidAddress(a, net)) : [];
+  const candidates = [...new Set([...detected, addressBook(s).get(EXTERNAL, 0).address])];
+  return { pool, address: pool ? link.address! : null, dismissed: !!link.dismissed, candidates, detected };
+}
+
+/** Link the current wallet to a pool (null = off). The UI asks for the pool's origin first. */
+export async function setPool(link: { pool: string; address: string } | null): Promise<PoolConfig> {
+  const s = await requireSession();
+  if (s.network !== 'mainnet') throw new WalletError('pool.mainnet_only');
+  const links = await readPoolLinks();
+  if (link) {
+    if (!poolById(link.pool)) throw new WalletError('pool.unknown');
+    const address = link.address.trim();
+    if (!isValidAddress(address, NETWORKS[s.network])) throw new WalletError('pool.bad_address');
+    links[s.walletId] = { pool: link.pool, address, dismissed: true };
+  } else {
+    links[s.walletId] = { dismissed: true };
+  }
+  await localStore.set(K_POOL, links);
+  return poolConfig();
+}
+
+export async function dismissPoolSuggestion() {
+  const s = await requireSession();
+  const links = await readPoolLinks();
+  links[s.walletId] = { ...(links[s.walletId] ?? {}), dismissed: true };
+  await localStore.set(K_POOL, links);
+}
+
+/** Rigs, hashrate and pending rewards at the linked pool; null when no pool is linked. */
+export async function poolStats(): Promise<PoolStats | null> {
+  const c = await poolConfig();
+  if (!c.pool || !c.address) return null;
+  return fetchPoolStats(poolById(c.pool)!, c.address);
 }
 
 /** The local daily P&L log of the current wallet, newest first. */
@@ -881,6 +950,9 @@ export async function deleteWallet(id: string, password: string) {
   await writeVault((await readVault()).filter(e => e.id !== id));
   const log = await readPnlLog();
   await localStore.set(K_PNL, Object.fromEntries(Object.entries(log).filter(([k]) => !k.startsWith(`${id}:`))));
+  const links = await readPoolLinks();
+  delete links[id];
+  await localStore.set(K_POOL, links);
   const s = (await sessionStore.get(K_SESSION)) as Session | undefined;
   if (s?.walletId === id) await lock();
   if ((await lastWalletId()) === id) await localStore.remove(K_LAST);

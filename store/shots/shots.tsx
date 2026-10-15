@@ -1,7 +1,7 @@
 // Store screenshot harness (dev only — never part of the extension build).
 // Renders the real UI with demo data: the public "abandon … about" test wallet and a stubbed
 // indexer, so no real person's addresses or balances appear in marketing images.
-//   http://localhost:5199/store/shots/index.html?scene=home|receive|send|nodes|zh|pnl|promo|marquee
+//   http://localhost:5199/store/shots/index.html?scene=home|receive|send|nodes|zh|pnl|mining|promo|marquee
 //   optional &fiat=off|usd|cny|sats (prices are stubbed too — no request leaves the page)
 import { createRoot } from 'react-dom/client';
 import { App } from '../../src/ui/App.tsx';
@@ -37,6 +37,7 @@ const COPY: Record<string, { title: string; sub: string }> = {
   nodes: { title: 'Your node, your explorer', sub: 'Pick or add your own RPC nodes and block explorers. Live height and latency at a glance.' },
   zh: { title: 'English & 简体中文', sub: 'Switch languages any time. Open source, reproducible builds, no tracking.' },
   pnl: { title: 'Know your day', sub: 'Optional fiat value and daily P&L — price moves and mining income, logged on your device.' },
+  mining: { title: 'Your rigs, at a glance', sub: 'Link your Pearlhash account to see rigs, hashrate, pending rewards — and spot a throttling GPU.' },
 };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -50,6 +51,27 @@ const fill = (el: HTMLInputElement | HTMLTextAreaElement, v: string) => {
   Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, v);
   el.dispatchEvent(new Event('input', { bubbles: true }));
 };
+
+// demo pool account (made-up rigs; a real response also carries worker IPs, which Akoya ignores)
+function demoPool() {
+  const rig = (name: string, base: number, n = 8) => ({
+    worker_name: name, worker_id: `9${name.replace(/\D/g, '')}000`, version: 'WildRig_0.51.4',
+    gpu_info: Array.from({ length: n }, (_, i) => ({ name: 'NVIDIA GeForce RTX 4090', hashrate: base * (1 + (((i * 7) % 5) - 2) / 100) })),
+  });
+  const throttled = rig('rig-04', 2.55e14);
+  const h = 3600_000;
+  const t0 = Math.floor(Date.now() / h) * h;
+  const iso = (ms: number) => new Date(ms).toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  const epoch = (k: number) => `${iso(t0 - k * h)} .. ${iso(t0 - (k - 1) * h)}`;
+  return {
+    connected_workers: [rig('rig-01', 3.05e14), rig('rig-02', 3.04e14), rig('rig-03', 3.06e14), throttled],
+    pending_rewards: { total_pending_prl: 38.2174, epochs: [4, 3, 2, 1].map(k => ({ epoch_label: epoch(k), amount: 6 + k * 1.7, immature_tx: k, coin_type: 'pearl' })) },
+    balance_transactions: [
+      ...[1, 2, 3, 4, 5].map(k => ({ amount: 7.1 + k * 0.6, reason: `Epoch ${epoch(k + 4)} credit`, timestamp: t0 - (k + 3) * h + 60_000, coin_type: 'pearl' })),
+      { amount: -28.4134, reason: 'Auto Payment', timestamp: t0 - 2.5 * h, coin_type: 'pearl' },
+    ],
+  };
+}
 
 async function setup() {
   const a = deriveAccount(await seedBytes(ABANDON), net, 'oyster');
@@ -122,6 +144,7 @@ async function setup() {
     } else if (u.includes('/api/v2/estimatefee/1')) body = { result: '0.01802650' };
     else if (u.includes('/api/v2/estimatefee/3')) body = { result: '0.00090090' };
     else if (u.includes('/api/v2/estimatefee/')) body = { result: '0.00001000' };
+    else if (u.includes('/api/account/')) body = demoPool();
     else if (u.includes('api.coingecko.com')) {
       const cur = new URL(u).searchParams.get('vs_currencies') ?? new URL(u).searchParams.get('vs_currency') ?? 'usd';
       const [now_, open, ch, cap, btcCap] = PRICES[cur] ?? PRICES.usd;
@@ -141,6 +164,7 @@ async function setup() {
   await localStore.set('vault.v1', [entry(idA, 'Mining Rig', a.xpub, 1), entry('22222222-2222-4222-8222-222222222222', 'Savings', z.xpub, 2)]);
   await localStore.set('settings.v1', { language: scene === 'zh' ? 'zh-CN' : 'en', fiat });
   await localStore.set('miningSenders.v1', [POOL]);
+  if (params.get('pool') !== 'off' && (scene === 'home' || scene === 'mining' || scene === 'zh')) await localStore.set('pool.v1', { [idA]: { pool: 'pearlhash', address: r0, dismissed: true } });
   await sessionStore.set('session.v1', { walletId: idA, name: 'Mining Rig', network: 'mainnet', mode: 'oyster', xpub: a.xpub, lastActive: Date.now() });
 }
 
@@ -162,6 +186,13 @@ async function drive() {
     await until(() => !!document.querySelector('.hero-pnl'));
     (document.querySelector('.hero-pnl') as HTMLElement).click();
     await until(() => !!document.querySelector('.pnl-big'));
+  }
+  if (scene === 'mining') {
+    await until(() => !!document.querySelector('.mining-card:not(:disabled)'));
+    (document.querySelector('.mining-card') as HTMLElement).click();
+    await until(() => !!document.querySelector('.stat-grid'));
+    const rig = [...document.querySelectorAll<HTMLElement>('.sheet .item')].find(e => e.textContent?.includes('rig-04'));
+    rig?.click();
   }
   if (scene === 'nodes') {
     byText('.tabbar button', 'Settings')!.click();

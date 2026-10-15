@@ -10,12 +10,30 @@ const DEV_UPSTREAMS: Record<string, string> = {
   mainnet: 'https://blockbook.pearlresearch.ai',
   testnet2: 'https://blockbook.testnet.pearlresearch.ai',
 };
+// mining pools (read-only GETs)
+const DEV_POOLS: Record<string, string> = { pearlhash: 'https://pearlhash.xyz' };
 
 function devIndexerProxy(): Plugin {
   return {
     name: 'akoya-dev-indexer-proxy',
     apply: 'serve',
     configureServer(server) {
+      server.middlewares.use('/__pool', async (req, res) => {
+        const m = /^\/(\w+)(\/api\/[\w/-]+)$/.exec(req.url ?? '');
+        if (!m || !DEV_POOLS[m[1]] || req.method !== 'GET') {
+          res.statusCode = 404;
+          return res.end();
+        }
+        try {
+          const up = await fetch(DEV_POOLS[m[1]] + m[2]);
+          res.statusCode = up.status;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(await up.text());
+        } catch (e) {
+          res.statusCode = 502;
+          res.end(JSON.stringify({ error: `dev proxy: ${String(e)}` }));
+        }
+      });
       server.middlewares.use('/__bb', async (req, res) => {
         const m = /^\/(mainnet|testnet2)(\/.*)$/.exec(req.url ?? '');
         if (!m) {

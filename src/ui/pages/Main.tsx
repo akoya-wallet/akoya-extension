@@ -4,6 +4,7 @@ import { APP_NAME, NETWORKS } from '../../core/networks.ts';
 import * as W from '../../ext/wallet.ts';
 import { openTab } from '../../ext/platform.ts';
 import { FIAT_LABEL, PRICE_SOURCE } from '../../ext/price.ts';
+import { MiningCard, MiningSheet, type PoolState } from './Mining.tsx';
 import { clockTime, dayKey, formatDay, formatFiat, formatPct, formatPrl, shortAddr, shortTxid } from '../../ext/format.ts';
 import type { Overview, PnlDay, PnlView, SessionInfo, TxItem, WalletMeta } from '../../ext/types.ts';
 import { useI18n } from '../../i18n/index.tsx';
@@ -107,7 +108,7 @@ export function MainShell({
   wallets: WalletMeta[];
   onSend: () => void;
   onReceive: (o: Overview) => void;
-  onSettings: () => void;
+  onSettings: (sub?: 'pool') => void;
   onLock: () => void;
   onSwitch: (id: string) => void;
   onAdd: () => void;
@@ -121,7 +122,24 @@ export function MainShell({
   const [picking, setPicking] = useState(false);
   const [pnl, setPnl] = useState<PnlState>({ kind: 'loading' });
   const [pnlOpen, setPnlOpen] = useState(false);
+  const [pool, setPool] = useState<PoolState>({ cfg: null });
+  const [miningOpen, setMiningOpen] = useState(false);
   const copy = useCopy();
+
+  const loadPool = async () => {
+    if (session.network !== 'mainnet') return;
+    try {
+      const cfg = await W.poolConfig();
+      if (!cfg.pool) return setPool({ cfg });
+      setPool(prev => ({ ...prev, cfg }));
+      const stats = (await W.poolStats()) ?? undefined;
+      setPool({ cfg, stats });
+    } catch (e) {
+      if (e instanceof W.LockedError) return;
+      // keep the last good stats through a failed refresh
+      setPool(prev => (prev.stats ? prev : { ...prev, error: e }));
+    }
+  };
 
   const loadPnl = async (o: Overview) => {
     try {
@@ -145,7 +163,10 @@ export function MainShell({
       const o = await W.overview(p);
       setOv(o);
       setError(null);
-      if (o.page === 1) void loadPnl(o);
+      if (o.page === 1) {
+        void loadPnl(o);
+        void loadPool();
+      }
     } catch (e) {
       if (e instanceof W.LockedError) return onLock();
       setError(e);
@@ -157,6 +178,7 @@ export function MainShell({
   useEffect(() => {
     // know up front whether a price line is coming, so the hero doesn't jump when it arrives
     setPnl({ kind: 'loading' });
+    setPool({ cfg: null });
     void W.getSettings().then(st => {
       const kind = session.network !== 'mainnet' ? 'unsupported' : st.fiat === 'off' ? 'off' : null;
       if (kind) setPnl(prev => (prev.kind === 'loading' ? { kind } : prev));
@@ -208,6 +230,13 @@ export function MainShell({
                 <span className="ic"><IconCopy /></span>{t('home.copy_address')}
               </button>
             </div>
+            <MiningCard
+              session={session}
+              state={pool}
+              payoutAddresses={ov?.payoutAddresses ?? []}
+              onOpen={() => setMiningOpen(true)}
+              onChanged={() => void loadPool()}
+            />
             <div className="section-title">
               <span>{t('home.recent')}</span>
               {ov && ov.txCount > 0 && <button className="link-btn" onClick={() => setTab('activity')}>{t('home.see_all', { count: ov.txCount })}</button>}
@@ -239,7 +268,7 @@ export function MainShell({
       <div className="tabbar">
         <button className={tab === 'home' ? 'on' : ''} onClick={() => { setTab('home'); setPage(1); }}><IconHome />{t('tab.home')}</button>
         <button className={tab === 'activity' ? 'on' : ''} onClick={() => setTab('activity')}><IconActivity />{t('tab.activity')}</button>
-        <button onClick={onSettings}><IconSettings />{t('tab.settings')}</button>
+        <button onClick={() => onSettings()}><IconSettings />{t('tab.settings')}</button>
       </div>
 
       {picking && (
@@ -248,6 +277,9 @@ export function MainShell({
         </Sheet>
       )}
       {pnlOpen && pnl.kind === 'ok' && <PnlSheet view={pnl.view} onClose={() => setPnlOpen(false)} />}
+      {miningOpen && pool.stats && (
+        <MiningSheet stats={pool.stats} price={pnl.kind === 'ok' ? pnl.view : null} onClose={() => setMiningOpen(false)} onSettings={() => onSettings('pool')} />
+      )}
     </div>
   );
 }

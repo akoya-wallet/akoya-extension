@@ -88,6 +88,8 @@ export interface Overview {
   netToday: string;
   /** false when today has more transactions than were loaded */
   todayComplete: boolean;
+  /** own addresses that received mining income in the loaded history, most frequent first */
+  payoutAddresses: string[];
   updatedAt: number;
 }
 
@@ -191,6 +193,20 @@ export interface Settings {
   language: Language;
   /** fiat price & P&L — off by default because it contacts a third party (CoinGecko) */
   fiat: Fiat | 'off';
+}
+
+/** Mining-pool link of the current wallet (opt-in). */
+export interface PoolConfig {
+  /** pool id (see ext/pool.ts) or null when off */
+  pool: string | null;
+  /** the address mined to */
+  address: string | null;
+  /** the home-screen suggestion was dismissed */
+  dismissed: boolean;
+  /** likely mining addresses: those that received mining income, then the first receive address */
+  candidates: string[];
+  /** the subset of candidates seen receiving mining income */
+  detected: string[];
 }
 
 export interface IndexerStatus {

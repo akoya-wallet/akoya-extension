@@ -27,6 +27,7 @@ Akoya is an open-source, self-custodial wallet for Pearl (PRL), the Proof-of-Use
 • Create a new wallet or import your recovery phrase (BIP39) — including phrases from the official Pearl Wallet / oyster. Akoya derives exactly the same addresses, including oyster's non-standard derivation.
 • Receive with a QR code, send to Taproot or post-quantum P2MR addresses, and review the complete transaction (recipient, amount, fee, change) before you sign.
 • Built for miners: pool payouts and coinbase rewards are labelled as mining income, with a daily total and maturity tracking.
+• Optional: link your Pearlhash pool account to see your rigs, per-GPU hashrate (slow cards highlighted) and pending rewards.
 • Optional: see your holdings' value and today's profit/loss (price move + mining income) in USD, CNY, EUR and more — or in sats. Off by default; prices come from CoinGecko and no wallet data is sent.
 • Multiple wallets, Mainnet and Testnet2, English and 简体中文.
 • Choose your own RPC node and block explorer.
@@ -50,6 +51,7 @@ Akoya 是 Pearl (PRL) 的开源自托管钱包。
 • 创建新钱包，或导入 BIP39 助记词——包括官方 Pearl Wallet / oyster 的助记词。Akoya 的地址与官方钱包完全一致（含 oyster 的非标准派生）。
 • 二维码收款；发送到 Taproot 或抗量子 P2MR 地址；签名前完整展示收款地址、金额、手续费和找零。
 • 为矿工设计：矿池结算和出块奖励显示为挖矿收益，并统计今日收益、跟踪成熟度。
+• 可选：关联 Pearlhash 矿池账户，查看矿机、每张 GPU 的算力（自动标出偏慢的卡）和待结算收益。
 • 可选：显示持仓价值和今日盈亏（价格涨跌 + 挖矿收益），支持美元、人民币、欧元等，也可以用 sats 计价。默认关闭；价格来自 CoinGecko，不发送任何钱包数据。
 • 多钱包、主网 / Testnet2、英文 / 简体中文。
 • 可自选 RPC 节点和区块浏览器。
@@ -74,7 +76,7 @@ Akoya 由独立团队 PRLFlipBTC 开发，非 Pearl Research Labs 官方产品�
 | Asset | Size | File |
 |---|---|---|
 | Store icon | 128×128 PNG | `public/icons/akoya-128.png` (already in the package) |
-| Screenshots (store takes up to 5) | 1280×800, 24-bit PNG | `store/assets/screenshot-{1-mining,2-receive,3-review,4-nodes,5-chinese,6-pnl}.png` — suggested set: 1, 6, 2, 3, 5 |
+| Screenshots (store takes up to 5) | 1280×800, 24-bit PNG | `store/assets/screenshot-{1-mining,2-receive,3-review,4-nodes,5-chinese,6-pnl,7-rigs}.png` — suggested set: 1, 7, 6, 3, 5 |
 | Small promo tile (required) | 440×280, 24-bit PNG | `store/assets/promo-small-440x280.png` |
 | Marquee (optional) | 1400×560, 24-bit PNG | `store/assets/promo-marquee-1400x560.png` |
 
@@ -102,7 +104,7 @@ These are the official Pearl RPC (Blockbook) servers. The wallet uses them to re
 
 Optional host permission `https://*/*`
 ```
-Never granted at install. Requested at runtime only when the user adds their own RPC node in Settings, and only for that single origin (chrome.permissions.request with that origin).
+Never granted at install. Requested at runtime only when the user adds their own RPC node or links their mining pool (Pearlhash) in Settings, and only for that single origin (chrome.permissions.request with that origin). The pool is asked for the stats of the user's mining address (rigs, hashrate, pending rewards); its API sends no CORS headers, so host access is required.
 ```
 
 **Remote code:** `No, I am not using remote code.`
@@ -116,7 +118,9 @@ Never granted at install. Requested at runtime only when the user adds their own
   communications, location, web history, user activity, website content)
 
 The optional CoinGecko price request (Price & P&L, off by default) contains no user data — only the
-coin ids and the chosen currency — so it doesn't change these answers.
+coin ids and the chosen currency. The optional mining-pool link sends the user's mining address to the
+pool they chose, to show that address's own stats — covered by "Financial and payment information"
+above (public address, sent to a service the user selects).
 
 Certify all three statements:
 

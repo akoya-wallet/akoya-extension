@@ -18,7 +18,7 @@ type Route =
   | { k: 'main' }
   | { k: 'receive'; ov: Overview }
   | { k: 'send' }
-  | { k: 'settings' };
+  | { k: 'settings'; sub?: 'pool' };
 
 const inExtension = typeof chrome !== 'undefined' && !!chrome.runtime?.id;
 
@@ -107,7 +107,7 @@ export function App() {
           wallets={wallets}
           onSend={() => setRoute({ k: 'send' })}
           onReceive={ov => setRoute({ k: 'receive', ov })}
-          onSettings={() => setRoute({ k: 'settings' })}
+          onSettings={sub => setRoute({ k: 'settings', sub })}
           onLock={lock}
           onSwitch={async id => {
             await W.lock();
@@ -128,6 +128,7 @@ export function App() {
       view = session && (
         <Settings
           session={session}
+          initialSub={route.sub}
           onBack={() => setRoute({ k: 'main' })}
           onLock={lock}
           onDeleted={() => {

@@ -31,6 +31,7 @@ storage, URLs or the network.
 | **Device theft (browser open, unlocked)** | use the open browser | Session holds no keys; sending/revealing still needs the password; auto-lock after inactivity. |
 | **Phishing clone of the extension** | trick users into entering their mnemonic | Publish the official extension ID; Akoya never asks for the mnemonic except in import. |
 | **Price feed (CoinGecko), opt-in** | wrong price; learn the user's IP and that they hold PRL | Off by default; enabled only by an explicit user action. Requests carry only coin ids + currency (no wallet data, `credentials: 'omit'`, `no-referrer`). Responses validated (finite, positive, bounded) — a wrong price can only mislead the displayed fiat value/P&L; it never reaches fee, amount or signing logic. |
+| **Mining pool API, opt-in** (Pearlhash) | wrong stats; learn the user's IP ↔ mining address; inject text via worker names (anyone can point a rig at an address) | Off by default; linked per wallet by an explicit user action, with a runtime permission for that single origin. Only the mining address is sent. Responses validated and bounded; strings stripped of control/bidi characters, length-capped and rendered as plain text; worker IPs dropped at parse time. Pool data is display-only — it never reaches balance, fee, amount or signing logic. |
 | **Cross-network confusion** | send mainnet funds to a testnet address (or vice versa) | HRP checked on every address; network fixed per wallet; indexer chain verified. |
 
 ## Non-goals

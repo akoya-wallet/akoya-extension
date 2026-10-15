@@ -21,6 +21,7 @@ implements everything below is public at <https://github.com/akoya-wallet/akoya-
 | Wallet name, network, derivation mode, account public key (xpub) | `chrome.storage.local` | Not encrypted. Public data: it cannot spend funds, but reveals balances and history to someone with access to your browser profile. |
 | Settings (language, auto-lock, RPC nodes, block explorers, display currency) | `chrome.storage.local` | Not sensitive. |
 | Addresses of mining pools that paid you | `chrome.storage.local` | Public blockchain data, used to label mining income. |
+| Mining-pool link (only if you link a pool): the pool and the address you mine to, per wallet | `chrome.storage.local` | Not sensitive. Deleted with the wallet. |
 | Daily P&L log (only if you turn on **Price & P&L**): per day, the PRL price, your holdings, PRL mined and the resulting profit/loss, kept for 90 days | `chrome.storage.local` | Not encrypted, like the xpub above. Never transmitted. Deleted with the wallet. |
 | Unlocked session (wallet id and xpub) | `chrome.storage.session` | Memory only, cleared when the browser closes or the wallet locks. |
 
@@ -46,6 +47,13 @@ The extension only connects to:
    These requests contain only the coin names and the currency, never your addresses, balances,
    xpub or anything else about your wallet, and they are sent without cookies. As with any website,
    CoinGecko can see your IP address. Your fiat value and P&L are calculated on your device.
+4. **The mining pool you link, only if you link one** (off by default; currently Pearlhash,
+   `pearlhash.xyz`; Settings → Mining pool, or "Connect" on the home screen). The extension asks the
+   pool for the stats of the one address you mine to — your rigs, hashrate, pending rewards and pool
+   payouts. Only that address is sent, without cookies; the pool sees your IP address and which
+   address you looked up. Chrome asks you to allow access to that one site first. The pool's
+   response also lists your rigs' IP addresses; the extension ignores them and never stores or
+   shows them.
 
 Nothing else is contacted. The extension does not use cookies and does not load remote code.
 
@@ -54,8 +62,8 @@ Nothing else is contacted. The extension does not use cookies and does not load 
 - `storage`: keep the encrypted wallet and your settings on your device.
 - Access to `blockbook.pearlresearch.ai` / `blockbook.testnet.pearlresearch.ai`: talk to the default
   Pearl RPC nodes.
-- Optional access to other `https://` sites: requested only when you add your own RPC node, and only
-  for that one site.
+- Optional access to other `https://` sites: requested only when you add your own RPC node or link a
+  mining pool, and only for that one site.
 
 ## Children
 

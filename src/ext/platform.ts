@@ -40,6 +40,22 @@ export const indexerFetch = (url: string, init?: RequestInit): Promise<Response>
   return fetch(url, init);
 };
 
+const DEV_POOL_REWRITE: Record<string, string> = { 'https://pearlhash.xyz': '/__pool/pearlhash' };
+
+/** fetch for mining-pool calls; in `vite dev` (no host permissions, no CORS) via the dev proxy */
+export const poolFetch = (url: string, init?: RequestInit): Promise<Response> => {
+  if (!hasChrome && import.meta.env?.DEV) {
+    for (const [from, to] of Object.entries(DEV_POOL_REWRITE)) if (url.startsWith(from)) return fetch(to + url.slice(from.length), init);
+  }
+  return fetch(url, init);
+};
+
+/** Whether the extension already has access to an origin (always true outside the extension). */
+export async function hasOrigin(url: string): Promise<boolean> {
+  if (!hasChrome || !chrome.permissions) return true;
+  return chrome.permissions.contains({ origins: [`${new URL(url).origin}/*`] });
+}
+
 export function openTab(url: string) {
   if (hasChrome && chrome.tabs?.create) void chrome.tabs.create({ url });
   else window.open(url, '_blank', 'noopener,noreferrer');

@@ -6,6 +6,10 @@
 # shipped WebAssembly is provably built from the Rust source in this repo + the pinned iris-rs.
 #
 #   needs: rustup (toolchain from nock/rust-toolchain.toml) and wasm-bindgen-cli $BINDGEN
+#
+# The canonical build host is Linux x86_64 (the CI runner). Other hosts produce a valid but not
+# byte-identical module (export order differs), so committed files come from CI: the nock-wasm job
+# uploads its rebuild as an artifact (nock-wasm-<sha>). On macOS this script is for local testing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$PWD
@@ -28,3 +32,6 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 wasm-bindgen --target web --out-dir "$OUT" --out-name akoya_nock nock/target/wasm32-unknown-unknown/release/akoya_nock.wasm
 (cd "$OUT" && shasum -a 256 akoya_nock.js akoya_nock_bg.wasm > SHA256SUMS && cat SHA256SUMS)
+if [ "$(uname -s)-$(uname -m)" != "Linux-x86_64" ]; then
+  echo "note: built on $(uname -s)-$(uname -m); the committed (canonical) build comes from Linux x86_64 CI" >&2
+fi

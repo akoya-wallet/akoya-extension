@@ -54,6 +54,7 @@ body.tab #root { width: 400px; height: 660px; border-radius: 22px; border: 1px s
 .tiny { font-size: 11px; }
 .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
 .green { color: var(--green); }
+.nowrap { white-space: nowrap; }
 .red { color: var(--red); }
 .amber { color: var(--amber); }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -97,6 +98,18 @@ body.tab #root { width: 400px; height: 660px; border-radius: 22px; border: 1px s
 .hero-amount .frac { font-size: 0.56em; font-weight: 600; color: var(--muted); letter-spacing: -0.02em; }
 .hero-amount .unit { font-size: 0.4em; font-weight: 600; color: var(--muted); margin-left: 0.32em; letter-spacing: 0; }
 .hero-chips { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+.hero-fiat { margin-top: 6px; font-size: 15px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hero-pnl { margin-top: 2px; border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; gap: 2px; padding: 3px 6px 3px 10px; border-radius: 999px; font-variant-numeric: tabular-nums; transition: background 0.15s; }
+.hero-pnl:hover { background: var(--surface); }
+.hero-pnl.green { color: var(--green); }
+.hero-pnl.red { color: var(--red); }
+.hero-pnl svg { width: 13px; height: 13px; opacity: 0.7; }
+.hero-enable { margin-top: 8px; color: var(--faint); }
+.hero-enable:hover { color: var(--accent); }
+.pnl-head { text-align: center; padding: 2px 0 4px; }
+.flip-bar { width: 84px; height: 4px; border-radius: 2px; background: var(--surface-3); margin: 5px 0 0 auto; overflow: hidden; }
+.flip-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.pnl-big { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
 .chip { font-size: 11px; line-height: 1; padding: 5px 9px; border-radius: 999px; background: var(--surface); color: var(--muted); white-space: nowrap; }
 .chip.amber { background: rgba(255, 196, 107, 0.12); color: var(--amber); }
 .chip.mined { background: rgba(79, 209, 161, 0.12); color: var(--green); }

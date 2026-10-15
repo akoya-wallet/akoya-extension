@@ -3,11 +3,12 @@ import akoyaMark from '../assets/akoya-mark.svg';
 import { APP_NAME, NETWORKS } from '../../core/networks.ts';
 import * as W from '../../ext/wallet.ts';
 import { openTab } from '../../ext/platform.ts';
-import { clockTime, dayKey, formatDay, formatPrl, shortAddr, shortTxid } from '../../ext/format.ts';
-import type { Overview, SessionInfo, TxItem, WalletMeta } from '../../ext/types.ts';
+import { FIAT_LABEL, PRICE_SOURCE } from '../../ext/price.ts';
+import { clockTime, dayKey, formatDay, formatFiat, formatPct, formatPrl, shortAddr, shortTxid } from '../../ext/format.ts';
+import type { Overview, PnlDay, PnlView, SessionInfo, TxItem, WalletMeta } from '../../ext/types.ts';
 import { useI18n } from '../../i18n/index.tsx';
-import { Btn, FullAddress, LangSelect, Notice, PasswordField, QrCode, Sheet, Topbar, useCopy } from '../components/common.tsx';
-import { IconActivity, IconArrowDown, IconArrowUp, IconCheck, IconCopy, IconExternal, IconHome, IconLock, IconPick, IconPlus, IconRefresh, IconSettings } from '../components/icons.tsx';
+import { Btn, FullAddress, Kv, LangSelect, Notice, PasswordField, QrCode, Sheet, Topbar, useCopy } from '../components/common.tsx';
+import { IconActivity, IconArrowDown, IconArrowUp, IconCheck, IconChevron, IconCopy, IconExternal, IconHome, IconLock, IconPick, IconPlus, IconRefresh, IconSettings } from '../components/icons.tsx';
 
 const initials = (name: string) => (name.trim()[0] ?? 'A').toUpperCase();
 
@@ -87,6 +88,10 @@ function WalletList({ wallets, current, onPick, onAdd }: { wallets: WalletMeta[]
 // ------------------------------------------------------------------ main shell
 
 type Tab = 'home' | 'activity';
+type PnlState = { kind: 'loading' | 'off' | 'unsupported' } | { kind: 'ok'; view: PnlView } | { kind: 'error'; error: unknown };
+
+/** green / red / neutral for a fiat amount (anything that rounds to 0.00 is neutral) */
+const tone = (v: number) => (Math.abs(v) < 0.005 ? '' : v > 0 ? 'green' : 'red');
 
 export function MainShell({
   session,
@@ -107,20 +112,40 @@ export function MainShell({
   onSwitch: (id: string) => void;
   onAdd: () => void;
 }) {
-  const { t, te } = useI18n();
+  const { t, te, lang } = useI18n();
   const [tab, setTab] = useState<Tab>('home');
   const [ov, setOv] = useState<Overview | null>(null);
   const [page, setPage] = useState(1);
   const [error, setError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [pnl, setPnl] = useState<PnlState>({ kind: 'loading' });
+  const [pnlOpen, setPnlOpen] = useState(false);
   const copy = useCopy();
+
+  const loadPnl = async (o: Overview) => {
+    try {
+      const r = await W.pnlToday(o);
+      setPnl(typeof r === 'string' ? { kind: r } : { kind: 'ok', view: r });
+    } catch (e) {
+      if (e instanceof W.LockedError) return;
+      // keep showing the last good figures through a failed refresh
+      setPnl(prev => (prev.kind === 'ok' ? prev : { kind: 'error', error: e }));
+    }
+  };
+  const enablePnl = async () => {
+    await W.setSettings({ fiat: lang === 'zh-CN' ? 'cny' : 'usd' });
+    setPnl({ kind: 'loading' });
+    if (ov) await loadPnl(ov);
+  };
 
   const load = async (p = page) => {
     setLoading(true);
     try {
-      setOv(await W.overview(p));
+      const o = await W.overview(p);
+      setOv(o);
       setError(null);
+      if (o.page === 1) void loadPnl(o);
     } catch (e) {
       if (e instanceof W.LockedError) return onLock();
       setError(e);
@@ -128,6 +153,16 @@ export function MainShell({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // know up front whether a price line is coming, so the hero doesn't jump when it arrives
+    setPnl({ kind: 'loading' });
+    void W.getSettings().then(st => {
+      const kind = session.network !== 'mainnet' ? 'unsupported' : st.fiat === 'off' ? 'off' : null;
+      if (kind) setPnl(prev => (prev.kind === 'loading' ? { kind } : prev));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.walletId]);
 
   useEffect(() => {
     void load(page);
@@ -161,7 +196,7 @@ export function MainShell({
 
         {tab === 'home' ? (
           <>
-            <BalanceHero ov={ov} />
+            <BalanceHero ov={ov} pnl={pnl} onEnablePnl={enablePnl} onOpenPnl={() => setPnlOpen(true)} />
             <div className="actions">
               <button className="action" onClick={() => ov && onReceive(ov)} disabled={!ov}>
                 <span className="ic"><IconArrowDown /></span>{t('home.receive')}
@@ -212,13 +247,17 @@ export function MainShell({
           <WalletList wallets={wallets} current={session.walletId} onPick={id => { setPicking(false); if (id !== session.walletId) onSwitch(id); }} onAdd={onAdd} />
         </Sheet>
       )}
+      {pnlOpen && pnl.kind === 'ok' && <PnlSheet view={pnl.view} onClose={() => setPnlOpen(false)} />}
     </div>
   );
 }
 
-/** Big balance: integer part prominent, decimals and unit de-emphasised, auto-shrinks to never overflow. */
-function BalanceHero({ ov }: { ov: Overview | null }) {
-  const { t } = useI18n();
+/**
+ * Big balance: integer part prominent, decimals and unit de-emphasised, auto-shrinks to never overflow.
+ * Below it (when the user turned prices on): fiat value of the holdings and today's P&L.
+ */
+function BalanceHero({ ov, pnl, onEnablePnl, onOpenPnl }: { ov: Overview | null; pnl: PnlState; onEnablePnl: () => void; onOpenPnl: () => void }) {
+  const { t, te, locale } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const full = ov ? formatPrl(ov.spendable) : '';
   const [int, frac] = full.split('.');
@@ -246,6 +285,32 @@ function BalanceHero({ ov }: { ov: Overview | null }) {
       ) : (
         <div className="skeleton" style={{ height: 48, width: 220, margin: '0 auto' }} />
       )}
+      {ov && pnl.kind === 'ok' && (
+        <>
+          <div className="hero-fiat" title={t('home.value_title', { amount: formatPrl(pnl.view.holdings, { maxDecimals: 4 }) })}>
+            ≈ {formatFiat(pnl.view.valueNow, pnl.view.fiat, locale)}
+          </div>
+          <button className={`hero-pnl ${tone(pnl.view.pnl)}`} onClick={onOpenPnl}>
+            {t('home.pnl_today', {
+              pnl: formatFiat(pnl.view.pnl, pnl.view.fiat, locale, { sign: true }) + (pnl.view.pnlPct !== null ? ` (${formatPct(pnl.view.pnlPct, locale)})` : ''),
+            })}
+            {pnl.view.partial && ' ~'}
+            <IconChevron />
+          </button>
+        </>
+      )}
+      {ov && pnl.kind === 'loading' && (
+        <>
+          <div className="skeleton" style={{ height: 18, width: 110, margin: '8px auto 0' }} />
+          <div className="skeleton" style={{ height: 16, width: 150, margin: '6px auto 0' }} />
+        </>
+      )}
+      {ov && pnl.kind === 'error' && <div className="hero-fiat tiny faint">{te(pnl.error)}</div>}
+      {ov && pnl.kind === 'off' && (
+        <button className="link-btn hero-enable" title={t('home.show_value_hint', { source: PRICE_SOURCE })} onClick={onEnablePnl}>
+          {t('home.show_value')}
+        </button>
+      )}
       {(unconfirmed !== 0n || immature > 0n || minedToday > 0n) && (
         <div className="hero-chips">
           {minedToday > 0n && <span className="chip mined">{t('home.mined_today', { amount: formatPrl(minedToday, { sign: true, maxDecimals: 4 }) })}</span>}
@@ -254,6 +319,90 @@ function BalanceHero({ ov }: { ov: Overview | null }) {
         </div>
       )}
     </div>
+  );
+}
+
+function PnlSheet({ view, onClose }: { view: PnlView; onClose: () => void }) {
+  const { t, locale } = useI18n();
+  const [days, setDays] = useState<PnlDay[] | null>(null);
+  useEffect(() => void W.pnlHistory().then(setDays, () => setDays([])), []);
+  const f = (v: number, sign = false) => formatFiat(v, view.fiat, locale, { sign });
+  const price = (v: number) => formatFiat(v, view.fiat, locale, { price: true });
+  const dayLabel = (day: string) => {
+    const [y, m, d] = day.split('-').map(Number);
+    const k = dayKey(new Date(y, m - 1, d).getTime() / 1000);
+    return k === 'today' ? t('common.today') : k === 'yesterday' ? t('common.yesterday') : formatDay(k, locale);
+  };
+  return (
+    <Sheet onClose={onClose}>
+      <div className="stack">
+        <div className="pnl-head">
+          <div className="muted">{t('pnl.title')}</div>
+          <div className={`pnl-big ${tone(view.pnl)}`}>{f(view.pnl, true)}</div>
+          <div className="tiny faint">
+            {view.pnlPct !== null && <span className={tone(view.pnl)}>{formatPct(view.pnlPct, locale)} · </span>}
+            {t('pnl.since_midnight')}
+          </div>
+        </div>
+        {view.partial && <Notice kind="warn">{t('pnl.partial')}</Notice>}
+        <div className="card tight">
+          <Kv k={<>{t('pnl.price')}<div className="tiny faint">{t('pnl.price_hint')}</div></>}>
+            <span className={`nowrap ${tone(view.pnlPrice)}`}>{f(view.pnlPrice, true)}</span>
+          </Kv>
+          <Kv k={<>{t('pnl.mined')}<div className="tiny faint">{t('pnl.mined_hint', { amount: formatPrl(view.minedToday, { maxDecimals: 4 }) })}</div></>}>
+            <span className={`nowrap ${tone(view.pnlMined)}`}>{f(view.pnlMined, true)}</span>
+          </Kv>
+        </div>
+        <div className="card tight">
+          <Kv k={t('pnl.value_now')}><span className="nowrap">{f(view.valueNow)}</span></Kv>
+          <Kv k={t('pnl.price_now')}>
+            <span className="nowrap">{price(view.price)}</span>
+            {view.change24h !== null && <div className={`tiny ${tone(view.change24h)}`}>24h {formatPct(view.change24h, locale)}</div>}
+          </Kv>
+          <Kv k={t('pnl.price_open')}><span className="nowrap">{price(view.priceOpen)}</span></Kv>
+          {view.fiat === 'sats' && view.flip !== null && (
+            <Kv k={<>{t('pnl.flip')}<div className="tiny faint">{t('pnl.flip_hint')}</div></>}>
+              {new Intl.NumberFormat(locale, { style: 'percent', maximumSignificantDigits: 3 }).format(view.flip)}
+              <div className="flip-bar"><i style={{ width: `${Math.min(Math.max(view.flip * 100, 1.5), 100)}%` }} /></div>
+            </Kv>
+          )}
+          <Kv k={t('pnl.hold_open')}>{formatPrl(view.balanceOpen, { maxDecimals: 4 })} PRL</Kv>
+          <Kv k={t('pnl.hold_now')}>{formatPrl(view.holdings, { maxDecimals: 4 })} PRL</Kv>
+        </div>
+        <p className="tiny faint" style={{ margin: 0 }}>{t('pnl.transfers_note')}</p>
+
+        <div className="section-title" style={{ margin: '6px 2px 0' }}>{t('pnl.history')}</div>
+        {days === null ? (
+          <div className="skeleton" style={{ height: 52 }} />
+        ) : days.length === 0 ? (
+          <div className="empty">{t('pnl.history_empty')}</div>
+        ) : (
+          <div className="list tight">
+            {days.slice(0, 30).map(d => (
+              <div key={d.day} className="item static">
+                <div className="grow">
+                  <div className="title">{dayLabel(d.day)}</div>
+                  <div className="meta">≈ {f(d.value)} · {formatPrl(d.bal, { maxDecimals: 2 })} PRL</div>
+                </div>
+                <div className="right">
+                  <div className={`amt ${tone(d.pnl)}`}>{f(d.pnl, true)}</div>
+                  <div className="meta">
+                    {d.pnlPct !== null ? formatPct(d.pnlPct, locale) : ''}
+                    {BigInt(d.mined) > 0n && <span className="green"> · {formatPrl(d.mined, { sign: true, maxDecimals: 2 })} PRL</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="tiny faint center" style={{ margin: 0 }}>
+          {t('pnl.history_note')}
+          <br />
+          {t('pnl.source', { source: PRICE_SOURCE, fiat: FIAT_LABEL[view.fiat] })}
+        </p>
+        <Btn className="block" onClick={onClose}>{t('pnl.close')}</Btn>
+      </div>
+    </Sheet>
   );
 }
 

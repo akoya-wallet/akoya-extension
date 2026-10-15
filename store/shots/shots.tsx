@@ -1,7 +1,8 @@
 // Store screenshot harness (dev only — never part of the extension build).
 // Renders the real UI with demo data: the public "abandon … about" test wallet and a stubbed
 // indexer, so no real person's addresses or balances appear in marketing images.
-//   http://localhost:5199/store/shots/index.html?scene=home|receive|send|nodes|zh|promo
+//   http://localhost:5199/store/shots/index.html?scene=home|receive|send|nodes|zh|pnl|promo|marquee
+//   optional &fiat=off|usd|cny|sats (prices are stubbed too — no request leaves the page)
 import { createRoot } from 'react-dom/client';
 import { App } from '../../src/ui/App.tsx';
 import '../../src/ui/styles.css';
@@ -13,7 +14,15 @@ import { localStore, sessionStore } from '../../src/ext/platform.ts';
 import lockup from '../../brand/png/lockup-white.png';
 import mark from '../../brand/svg/akoya-mark-pearl.svg';
 
-const scene = new URLSearchParams(location.search).get('scene') ?? 'home';
+const params = new URLSearchParams(location.search);
+const scene = params.get('scene') ?? 'home';
+const fiat = params.get('fiat') ?? (scene === 'zh' ? 'cny' : 'usd');
+// demo prices per currency: [now, at midnight, 24h change %, PRL market cap, BTC market cap]
+const PRICES: Record<string, [number, number, number, number, number]> = {
+  usd: [1.89, 1.8, 7.56, 6.55e8, 1.64e12],
+  cny: [12.7, 12.1, 7.58, 4.38e9, 1.1e13],
+  sats: [2324.48, 2210.2, 9.58, 8.02e11, 2.01e15],
+};
 const net = NETWORKS.mainnet;
 const ABANDON = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 const ZOO = 'zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong';
@@ -27,6 +36,7 @@ const COPY: Record<string, { title: string; sub: string }> = {
   send: { title: 'See every detail before you sign', sub: 'Recipient, amount, fee, change and inputs — signed locally, keys never leave your device.' },
   nodes: { title: 'Your node, your explorer', sub: 'Pick or add your own RPC nodes and block explorers. Live height and latency at a glance.' },
   zh: { title: 'English & 简体中文', sub: 'Switch languages any time. Open source, reproducible builds, no tracking.' },
+  pnl: { title: 'Know your day', sub: 'Optional fiat value and daily P&L — price moves and mining income, logged on your device.' },
 };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -112,6 +122,13 @@ async function setup() {
     } else if (u.includes('/api/v2/estimatefee/1')) body = { result: '0.01802650' };
     else if (u.includes('/api/v2/estimatefee/3')) body = { result: '0.00090090' };
     else if (u.includes('/api/v2/estimatefee/')) body = { result: '0.00001000' };
+    else if (u.includes('api.coingecko.com')) {
+      const cur = new URL(u).searchParams.get('vs_currencies') ?? new URL(u).searchParams.get('vs_currency') ?? 'usd';
+      const [now_, open, ch, cap, btcCap] = PRICES[cur] ?? PRICES.usd;
+      body = u.includes('/simple/price')
+        ? { 'pearl-2': { [cur]: now_, [`${cur}_24h_change`]: ch, [`${cur}_market_cap`]: cap }, bitcoin: { [`${cur}_market_cap`]: btcCap } }
+        : { prices: [[midnight.getTime() - 300_000, open * 0.995], [midnight.getTime() + 60_000, open], [Date.now(), now_]] };
+    }
     await sleep(30);
     return new Response(JSON.stringify(body), { status: 200 });
   }) as typeof fetch;
@@ -122,7 +139,7 @@ async function setup() {
   });
   const idA = '11111111-1111-4111-8111-111111111111';
   await localStore.set('vault.v1', [entry(idA, 'Mining Rig', a.xpub, 1), entry('22222222-2222-4222-8222-222222222222', 'Savings', z.xpub, 2)]);
-  await localStore.set('settings.v1', { language: scene === 'zh' ? 'zh-CN' : 'en' });
+  await localStore.set('settings.v1', { language: scene === 'zh' ? 'zh-CN' : 'en', fiat });
   await localStore.set('miningSenders.v1', [POOL]);
   await sessionStore.set('session.v1', { walletId: idA, name: 'Mining Rig', network: 'mainnet', mode: 'oyster', xpub: a.xpub, lastActive: Date.now() });
 }
@@ -140,6 +157,11 @@ async function drive() {
     await until(() => !!byText('.seg button', '90.09'));
     byText('button.btn.primary', 'Review')!.click();
     await until(() => !!byText('h1', 'Confirm transaction'));
+  }
+  if (scene === 'pnl') {
+    await until(() => !!document.querySelector('.hero-pnl'));
+    (document.querySelector('.hero-pnl') as HTMLElement).click();
+    await until(() => !!document.querySelector('.pnl-big'));
   }
   if (scene === 'nodes') {
     byText('.tabbar button', 'Settings')!.click();

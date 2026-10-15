@@ -23,7 +23,8 @@ Akoya（阿古屋珍珠）是 **Pearl (PRL)** 的自托管 Chrome 插件钱包�
 - 创建钱包 / 导入 BIP39 助记词（也支持 oyster 导出的 hex 种子）
 - **与官方 Pearl Wallet / oyster 地址完全一致**（包括 oyster 的非标准派生）
 - 收款二维码；发送到 Taproot / P2MR 地址，签名前展示完整交易
-- 交易记录、挖矿奖励成熟度识别
+- 交易记录、挖矿奖励成熟度识别，矿池结算标记为挖矿收益
+- 可选的法币价值和每日盈亏（USD、CNY、HKD、EUR、JPY、KRW 或 BTC/sats），本机每日记录；默认关闭，价格来自 CoinGecko，不发送任何钱包数据
 - 多钱包、Mainnet / Testnet2、可自定义 Blockbook 索引节点
 - 私钥只在签名瞬间存在于内存，签名完全离线
 

@@ -84,6 +84,10 @@ export interface Overview {
   rejected: number;
   /** coinbase rewards + pool payouts received today (local time), grains */
   minedToday: string;
+  /** net effect of today's transactions (incl. pending), grains — for daily P&L */
+  netToday: string;
+  /** false when today has more transactions than were loaded */
+  todayComplete: boolean;
   updatedAt: number;
 }
 
@@ -126,6 +130,45 @@ export interface SendPreview {
 }
 
 export type Language = 'en' | 'zh-CN';
+/** display currency for price & P&L — 'sats' is BTC, priced in satoshis */
+export type Fiat = 'usd' | 'cny' | 'hkd' | 'eur' | 'jpy' | 'krw' | 'sats';
+
+/** Today's value and profit/loss of the current wallet, in fiat. */
+export interface PnlView {
+  fiat: Fiat;
+  price: number;
+  change24h: number | null;
+  /** PRL market cap ÷ BTC market cap (the "flip BTC" meter), when both are known */
+  flip: number | null;
+  /** price at local midnight */
+  priceOpen: number;
+  /** grains */
+  holdings: string;
+  balanceOpen: string;
+  minedToday: string;
+  valueNow: number;
+  pnlPrice: number;
+  pnlMined: number;
+  pnl: number;
+  pnlPct: number | null;
+  /** some of today's transactions weren't loaded — figures are approximate */
+  partial: boolean;
+}
+
+/** One day of the local P&L log (stored on this device only). */
+export interface PnlDay {
+  day: string;
+  open: number;
+  /** last price seen that day */
+  close: number;
+  balOpen: string;
+  bal: string;
+  mined: string;
+  pnl: number;
+  pnlPct: number | null;
+  value: number;
+  at: number;
+}
 
 export interface Explorer {
   id: string;
@@ -146,6 +189,8 @@ export interface Settings {
   explorer: Record<NetworkId, string>;
   autoLockMinutes: number;
   language: Language;
+  /** fiat price & P&L — off by default because it contacts a third party (CoinGecko) */
+  fiat: Fiat | 'off';
 }
 
 export interface IndexerStatus {

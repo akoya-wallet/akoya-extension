@@ -27,13 +27,14 @@ Akoya is an open-source, self-custodial wallet for Pearl (PRL), the Proof-of-Use
 • Create a new wallet or import your recovery phrase (BIP39) — including phrases from the official Pearl Wallet / oyster. Akoya derives exactly the same addresses, including oyster's non-standard derivation.
 • Receive with a QR code, send to Taproot or post-quantum P2MR addresses, and review the complete transaction (recipient, amount, fee, change) before you sign.
 • Built for miners: pool payouts and coinbase rewards are labelled as mining income, with a daily total and maturity tracking.
+• Optional: see your holdings' value and today's profit/loss (price move + mining income) in USD, CNY, EUR and more — or in sats. Off by default; prices come from CoinGecko and no wallet data is sent.
 • Multiple wallets, Mainnet and Testnet2, English and 简体中文.
 • Choose your own RPC node and block explorer.
 
 Security
 • Your recovery phrase is encrypted on your device (Argon2id + AES-256-GCM) and never leaves it.
 • Private keys exist only for the moment a transaction is signed; signing works fully offline.
-• No analytics, no tracking, no remote code, minimal permissions.
+• No analytics, no tracking, no remote code, minimal permissions. The only optional third party is the CoinGecko price feed, and only if you turn it on.
 • Open source (MIT). Every release is built reproducibly in public CI with signed build provenance and an SBOM, so you can verify the package you install: https://github.com/akoya-wallet/akoya-extension
 
 Akoya will never ask for your recovery phrase. Only enter it when importing a wallet.
@@ -49,13 +50,14 @@ Akoya 是 Pearl (PRL) 的开源自托管钱包。
 • 创建新钱包，或导入 BIP39 助记词——包括官方 Pearl Wallet / oyster 的助记词。Akoya 的地址与官方钱包完全一致（含 oyster 的非标准派生）。
 • 二维码收款；发送到 Taproot 或抗量子 P2MR 地址；签名前完整展示收款地址、金额、手续费和找零。
 • 为矿工设计：矿池结算和出块奖励显示为挖矿收益，并统计今日收益、跟踪成熟度。
+• 可选：显示持仓价值和今日盈亏（价格涨跌 + 挖矿收益），支持美元、人民币、欧元等，也可以用 sats 计价。默认关闭；价格来自 CoinGecko，不发送任何钱包数据。
 • 多钱包、主网 / Testnet2、英文 / 简体中文。
 • 可自选 RPC 节点和区块浏览器。
 
 安全
 • 助记词在本机加密（Argon2id + AES-256-GCM），永不离开你的设备。
 • 私钥只在签名瞬间存在，签名完全离线。
-• 无统计、无追踪、无远程代码、最小权限。
+• 无统计、无追踪、无远程代码、最小权限。唯一可选的第三方是 CoinGecko 价格源，且仅在你开启后使用。
 • 开源（MIT）。每个版本都在公开 CI 中可复现构建，并附带签名的构建来源证明和 SBOM：https://github.com/akoya-wallet/akoya-extension
 
 Akoya 永远不会向你索要助记词。只在导入钱包时输入它。
@@ -72,7 +74,7 @@ Akoya 由独立团队 PRLFlipBTC 开发，非 Pearl Research Labs 官方产品�
 | Asset | Size | File |
 |---|---|---|
 | Store icon | 128×128 PNG | `public/icons/akoya-128.png` (already in the package) |
-| Screenshots (1–5) | 1280×800, 24-bit PNG | `store/assets/screenshot-{1-mining,2-receive,3-review,4-nodes,5-chinese}.png` |
+| Screenshots (store takes up to 5) | 1280×800, 24-bit PNG | `store/assets/screenshot-{1-mining,2-receive,3-review,4-nodes,5-chinese,6-pnl}.png` — suggested set: 1, 6, 2, 3, 5 |
 | Small promo tile (required) | 440×280, 24-bit PNG | `store/assets/promo-small-440x280.png` |
 | Marquee (optional) | 1400×560, 24-bit PNG | `store/assets/promo-marquee-1400x560.png` |
 
@@ -112,6 +114,9 @@ Never granted at install. Requested at runtime only when the user adds their own
   selects. (Nothing is sent to PRLFlipBTC; nothing is collected by us.)
 - ☐ everything else (personally identifiable info, health, authentication information, personal
   communications, location, web history, user activity, website content)
+
+The optional CoinGecko price request (Price & P&L, off by default) contains no user data — only the
+coin ids and the chosen currency — so it doesn't change these answers.
 
 Certify all three statements:
 

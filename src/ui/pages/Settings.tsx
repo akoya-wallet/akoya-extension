@@ -6,7 +6,8 @@ import { WalletError } from '../../core/errors.ts';
 import * as W from '../../ext/wallet.ts';
 import { APP_VERSION, REPO_URL } from '../../ext/app.ts';
 import { openTab, requestOrigin } from '../../ext/platform.ts';
-import type { Explorer, IndexerStatus, Language, SessionInfo, Settings as S } from '../../ext/types.ts';
+import { FIATS, FIAT_LABEL, PRICE_SOURCE } from '../../ext/price.ts';
+import type { Explorer, Fiat, IndexerStatus, Language, SessionInfo, Settings as S } from '../../ext/types.ts';
 import { LANGUAGES, useI18n } from '../../i18n/index.tsx';
 import { Btn, Kv, Notice, PasswordField, Topbar, useToast } from '../components/common.tsx';
 import { IconChevron, IconExternal, IconEye, IconLock, IconPlus } from '../components/icons.tsx';
@@ -77,9 +78,20 @@ export function Settings({ session, onBack, onLock, onDeleted, onRenamed }: {
               {[5, 15, 30, 60, 240].map(m => <option key={m} value={m}>{t('settings.minutes', { n: m })}</option>)}
             </select>
           </SelectRow>
+          <SelectRow label={t('settings.fiat')}>
+            <select
+              className="select compact"
+              value={settings?.fiat ?? 'off'}
+              onChange={async e => setSettings(await W.setSettings({ fiat: e.target.value as Fiat | 'off' }))}
+            >
+              <option value="off">{t('settings.fiat_off')}</option>
+              {FIATS.map(f => <option key={f} value={f}>{FIAT_LABEL[f]}</option>)}
+            </select>
+          </SelectRow>
           <Row label={t('settings.indexers')} value={settings ? new URL(settings.indexers[session.network][0]).host : ''} onClick={() => setSub('indexers')} />
           <Row label={t('settings.explorer')} value={explorerName} onClick={() => setSub('explorers')} />
         </div>
+        {settings && settings.fiat !== 'off' && <p className="tiny faint" style={{ margin: '8px 4px 0' }}>{t('settings.fiat_note', { source: PRICE_SOURCE })}</p>}
 
         <div className="section-title mt-lg">{t('settings.wallet')}</div>
         <div className="list">

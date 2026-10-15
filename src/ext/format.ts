@@ -17,6 +17,29 @@ export function formatPrl(grains: bigint | string, opts: { sign?: boolean; group
   return neg ? `-${s}` : opts.sign && g > 0n ? `+${s}` : s;
 }
 
+/**
+ * Amount in the display currency and UI locale: "$1,234.56", "¥1,234.56", "₩2,546", "2,324 sats".
+ * Prices under 100 get two extra decimals (PRL trades around a dollar); amounts smaller than the
+ * currency's smallest unit get two extra so they don't collapse to 0.00. 'sats' is BTC: satoshis,
+ * switching to ₿ from 1 BTC up.
+ */
+export function formatFiat(v: number, fiat: string, locale: string, opts: { sign?: boolean; price?: boolean } = {}): string {
+  const abs = Math.abs(v);
+  const signDisplay = opts.sign ? 'exceptZero' : 'auto';
+  if (fiat === 'sats') {
+    if (abs >= 1e8) return new Intl.NumberFormat(locale, { minimumFractionDigits: 4, maximumFractionDigits: 4, signDisplay }).format(v / 1e8).replace(/^([+-]?)/, '$1₿');
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: abs < 100 ? 2 : 0, signDisplay }).format(v)} sats`;
+  }
+  const currency = fiat.toUpperCase();
+  const d = new Intl.NumberFormat(locale, { style: 'currency', currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  const max = opts.price ? (abs >= 100 ? d : d + 2) : abs > 0 && abs < 10 ** -d ? d + 2 : d;
+  return new Intl.NumberFormat(locale, { style: 'currency', currency, minimumFractionDigits: d, maximumFractionDigits: max, signDisplay }).format(v);
+}
+
+/** 1.234 -> "+1.23%" */
+export const formatPct = (v: number, locale: string) =>
+  new Intl.NumberFormat(locale, { style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: 'exceptZero' }).format(v / 100);
+
 /** "1.5" -> 150000000n. Strict: digits, optional dot, at most 8 decimals. */
 export function parsePrl(input: string): bigint {
   const s = input.trim().replace(/,/g, '');

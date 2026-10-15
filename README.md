@@ -26,7 +26,8 @@ in is not us. See [TRADEMARKS.md](TRADEMARKS.md).
 - Create a wallet or import a BIP39 recovery phrase (or an oyster hex seed)
 - **Same addresses as the official Pearl Wallet / oyster**, including oyster's non-standard derivation quirk
 - Receive with QR code, send to Taproot or P2MR addresses, full transaction review before signing
-- Transaction history, mining-reward (coinbase) maturity tracking
+- Transaction history, mining-reward (coinbase) maturity tracking, pool payouts labelled as mining income
+- Optional fiat value and daily P&L (USD, CNY, HKD, EUR, JPY, KRW or BTC/sats), with a local daily log — off by default, uses CoinGecko, sends no wallet data
 - Multiple wallets, Mainnet and Testnet2, user-configurable Blockbook indexers
 - Keys exist in memory only while signing; signing works fully offline
 

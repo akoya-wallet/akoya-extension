@@ -30,10 +30,12 @@ storage, URLs or the network.
 | **Device theft (browser closed)** | copy `chrome.storage.local` | Only the encrypted vault; offline Argon2id brute force is the cost. |
 | **Device theft (browser open, unlocked)** | use the open browser | Session holds no keys; sending/revealing still needs the password; auto-lock after inactivity. |
 | **Phishing clone of the extension** | trick users into entering their mnemonic | Publish the official extension ID; Akoya never asks for the mnemonic except in import. |
+| **Price feed (CoinGecko), opt-in** | wrong price; learn the user's IP and that they hold PRL | Off by default; enabled only by an explicit user action. Requests carry only coin ids + currency (no wallet data, `credentials: 'omit'`, `no-referrer`). Responses validated (finite, positive, bounded) — a wrong price can only mislead the displayed fiat value/P&L; it never reaches fee, amount or signing logic. |
 | **Cross-network confusion** | send mainnet funds to a testnet address (or vice versa) | HRP checked on every address; network fixed per wallet; indexer chain verified. |
 
 ## Non-goals
 
 - Protection against a compromised OS, browser, or a higher-privileged malicious extension.
 - Network-level privacy from the indexer (it learns the xpub). Users can self-host Blockbook.
+- Hiding the daily P&L log from someone with access to the browser profile — like the xpub, it is stored in clear (balances are already derivable from the xpub).
 - Cloud backup, cross-device sync, server-side custody, remote config, or auto-update outside the store.

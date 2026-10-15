@@ -19,8 +19,9 @@ implements everything below is public at <https://github.com/akoya-wallet/akoya-
 |---|---|---|
 | Recovery phrase / seed and optional BIP39 passphrase | `chrome.storage.local` | Encrypted with your password (Argon2id + AES-256-GCM). Never transmitted. |
 | Wallet name, network, derivation mode, account public key (xpub) | `chrome.storage.local` | Not encrypted. Public data: it cannot spend funds, but reveals balances and history to someone with access to your browser profile. |
-| Settings (language, auto-lock, RPC nodes, block explorers) | `chrome.storage.local` | Not sensitive. |
+| Settings (language, auto-lock, RPC nodes, block explorers, display currency) | `chrome.storage.local` | Not sensitive. |
 | Addresses of mining pools that paid you | `chrome.storage.local` | Public blockchain data, used to label mining income. |
+| Daily P&L log (only if you turn on **Price & P&L**): per day, the PRL price, your holdings, PRL mined and the resulting profit/loss, kept for 90 days | `chrome.storage.local` | Not encrypted, like the xpub above. Never transmitted. Deleted with the wallet. |
 | Unlocked session (wallet id and xpub) | `chrome.storage.session` | Memory only, cleared when the browser closes or the wallet locks. |
 
 Uninstalling the extension or using **Settings → Delete this wallet** removes this data from your device.
@@ -39,6 +40,12 @@ The extension only connects to:
 2. **A block explorer, only when you click a "View in explorer" link.** That opens a normal browser
    tab at the explorer you selected (by default `explorer.pearlresearch.ai`) for that transaction
    or address.
+3. **CoinGecko (`api.coingecko.com`), only if you turn on Price & P&L** (off by default; Settings →
+   General, or "Show value & P&L" on the home screen). The extension then asks CoinGecko for the
+   current PRL price, its price at midnight and the PRL/BTC market caps, in the currency you picked.
+   These requests contain only the coin names and the currency, never your addresses, balances,
+   xpub or anything else about your wallet, and they are sent without cookies. As with any website,
+   CoinGecko can see your IP address. Your fiat value and P&L are calculated on your device.
 
 Nothing else is contacted. The extension does not use cookies and does not load remote code.
 

@@ -22,15 +22,20 @@ import { Blockbook, BlockbookError, parseTokenPath, type BBTx, type BBXpub } fro
 import { decryptWallet, encryptWallet, passwordProblem, reencryptWallet, type VaultEntry } from '../core/keystore.ts';
 import { COINBASE_MATURITY, EXTERNAL, INTERNAL, MAX_SANE_FEE_PER_VB, MIN_RELAY_FEE_PER_VB, NETWORKS, type NetworkId, type PearlNetwork } from '../core/networks.ts';
 import { InsufficientFunds, planTransaction, signPlan, type TxPlan, type WalletUtxo } from '../core/tx.ts';
+import { dailyPnl, localDay } from '../core/pnl.ts';
 import { formatPrl, parsePrl } from './format.ts';
 import { indexerFetch, localStore, sessionStore } from './platform.ts';
+import { FIATS, priceAt, spot } from './price.ts';
 import type {
   AddressRow,
   Explorer,
   FeeEstimates,
+  Fiat,
   ImportPreview,
   IndexerStatus,
   Overview,
+  PnlDay,
+  PnlView,
   SeedArgs,
   SeedCheck,
   SendDraft,
@@ -46,6 +51,8 @@ const K_VAULT = 'vault.v1';
 const K_SETTINGS = 'settings.v1';
 const K_SESSION = 'session.v1';
 const K_LAST = 'lastWallet.v1';
+const K_PNL = 'pnl.v1';
+const K_PRICE_OPEN = 'priceOpen.v1';
 
 // ---------------------------------------------------------------- vault & settings
 
@@ -71,6 +78,7 @@ const DEFAULT_SETTINGS: Settings = {
   explorer: { mainnet: NETWORKS.mainnet.explorers[0].id, testnet2: NETWORKS.testnet2.explorers[0].id },
   autoLockMinutes: 15,
   language: 'en',
+  fiat: 'off',
 };
 
 const NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
@@ -97,6 +105,7 @@ export async function getSettings(): Promise<Settings> {
     explorer: { ...DEFAULT_SETTINGS.explorer },
     autoLockMinutes: typeof s?.autoLockMinutes === 'number' ? Math.min(Math.max(s.autoLockMinutes, 1), 240) : 15,
     language: s?.language === 'zh-CN' ? 'zh-CN' : 'en',
+    fiat: FIATS.includes(s?.fiat as Fiat) ? (s!.fiat as Fiat) : 'off',
   };
   for (const id of NETWORK_IDS) {
     const wanted = s?.explorer?.[id];
@@ -441,6 +450,8 @@ async function tagPoolPayouts(bb: Blockbook, txs: BBTx[], items: TxItem[], net: 
 }
 const MAX_COINBASE_LOOKUPS = 200;
 
+const HISTORY_PAGE_SIZE = 20;
+
 interface ChainState {
   x: BBXpub;
   utxos: WalletUtxo[];
@@ -451,7 +462,7 @@ interface ChainState {
 }
 
 /** Fetch xpub data + UTXOs and re-check every path against local derivation. */
-async function loadChain(s: Session, page = 1, pageSize = 20): Promise<ChainState> {
+async function loadChain(s: Session, page = 1, pageSize = HISTORY_PAGE_SIZE): Promise<ChainState> {
   const net = NETWORKS[s.network];
   const ab = addressBook(s);
   const bb = await indexer(s.network);
@@ -556,11 +567,9 @@ export async function overview(page = 1): Promise<Overview> {
   const receive = ab.get(EXTERNAL, c.nextReceive);
   const history = c.x.transactions.map(t => toTxItem(t, net));
   await tagPoolPayouts(bb, c.x.transactions, history, net);
-  const midnight = new Date();
-  midnight.setHours(0, 0, 0, 0);
-  const minedToday = history
-    .filter(h => (h.coinbase || h.poolPayout) && h.time * 1000 >= midnight.getTime() && BigInt(h.net) > 0n)
-    .reduce((a, h) => a + BigInt(h.net), 0n);
+  const today = await todaysTxs(s, bb, c.x, history);
+  const minedToday = today.items.filter(h => (h.coinbase || h.poolPayout) && BigInt(h.net) > 0n).reduce((a, h) => a + BigInt(h.net), 0n);
+  const netToday = today.items.reduce((a, h) => a + BigInt(h.net), 0n);
   return {
     confirmed: confirmed.toString(),
     unconfirmed: unconfirmed.toString(),
@@ -577,8 +586,118 @@ export async function overview(page = 1): Promise<Overview> {
     indexer: bb.base,
     rejected: c.rejected,
     minedToday: minedToday.toString(),
+    netToday: netToday.toString(),
+    todayComplete: today.complete,
     updatedAt: Date.now(),
   };
+}
+
+const TODAY_MAX_PAGES = 5;
+
+/**
+ * Today's transactions (local time, plus anything pending). History is newest first; on a busy
+ * mining wallet page 1 may not reach back to midnight, so follow a few more pages.
+ */
+async function todaysTxs(s: Session, bb: Blockbook, first: BBXpub, firstItems: TxItem[]): Promise<{ items: TxItem[]; complete: boolean }> {
+  if (first.page !== 1) return { items: [], complete: false };
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const isToday = (h: TxItem) => h.confirmations === 0 || h.time * 1000 >= midnight.getTime();
+  const items = firstItems.filter(isToday);
+  let page = first;
+  let last = firstItems;
+  const reachesOn = () => last.length > 0 && isToday(last[last.length - 1]) && page.totalPages > page.page;
+  while (reachesOn() && page.page < TODAY_MAX_PAGES) {
+    page = await bb.xpub(`tr(${s.xpub})`, { page: page.page + 1, pageSize: HISTORY_PAGE_SIZE });
+    last = page.transactions.map(t => toTxItem(t, NETWORKS[s.network]));
+    await tagPoolPayouts(bb, page.transactions, last, NETWORKS[s.network]);
+    items.push(...last.filter(isToday));
+  }
+  return { items, complete: !reachesOn() };
+}
+
+// ---------------------------------------------------------------- fiat value & daily P&L
+//
+// Opt-in (Settings → Price & P&L). Prices come from CoinGecko; nothing about the wallet is sent.
+// Each day's figures are logged on this device only, so the user can look back day by day.
+
+const PNL_KEEP_DAYS = 90;
+
+/** Price at local midnight, fetched once per day and currency. */
+async function openPrice(fiat: Fiat, day: string, midnightMs: number): Promise<number> {
+  const cache = ((await localStore.get(K_PRICE_OPEN)) ?? {}) as Record<string, unknown>;
+  const key = `${fiat}:${day}`;
+  const hit = cache[key];
+  if (typeof hit === 'number' && Number.isFinite(hit) && hit > 0) return hit;
+  const p = await priceAt(fiat, midnightMs);
+  const keep = Object.fromEntries(Object.entries(cache).filter(([k, v]) => k.endsWith(`:${day}`) && typeof v === 'number'));
+  await localStore.set(K_PRICE_OPEN, { ...keep, [key]: p });
+  return p;
+}
+
+type PnlLog = Record<string, Record<string, PnlDay>>;
+const pnlKey = (walletId: string, fiat: Fiat) => `${walletId}:${fiat}`;
+const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const grains = (v: unknown) => typeof v === 'string' && /^\d{1,20}$/.test(v);
+
+async function readPnlLog(): Promise<PnlLog> {
+  const v = await localStore.get(K_PNL);
+  return v && typeof v === 'object' ? (v as PnlLog) : {};
+}
+
+/**
+ * Today's fiat value and P&L for the current wallet, given a fresh overview (page 1).
+ * 'off' when the user hasn't turned prices on; 'unsupported' on test networks (no market price).
+ */
+export async function pnlToday(o: Overview): Promise<PnlView | 'off' | 'unsupported'> {
+  const s = await requireSession();
+  if (s.network !== 'mainnet') return 'unsupported';
+  const { fiat } = await getSettings();
+  if (fiat === 'off') return 'off';
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const day = localDay(midnight);
+  const [now, open] = await Promise.all([spot(fiat), openPrice(fiat, day, midnight.getTime())]);
+  const holdings = BigInt(o.spendable) + BigInt(o.immature);
+  const r = dailyPnl({ holdingsNow: holdings, netFlowToday: BigInt(o.netToday), minedToday: BigInt(o.minedToday), priceNow: now.price, priceOpen: open });
+  const view: PnlView = {
+    fiat,
+    price: now.price,
+    change24h: now.change24h,
+    flip: now.flip,
+    priceOpen: open,
+    holdings: holdings.toString(),
+    balanceOpen: r.balanceOpen.toString(),
+    minedToday: o.minedToday,
+    valueNow: r.valueNow,
+    pnlPrice: r.pnlPrice,
+    pnlMined: r.pnlMined,
+    pnl: r.pnl,
+    pnlPct: r.pnlPct,
+    partial: !o.todayComplete,
+  };
+  if (o.todayComplete) {
+    const log = await readPnlLog();
+    const k = pnlKey(s.walletId, fiat);
+    const days = { ...(log[k] ?? {}) };
+    days[day] = { day, open, close: now.price, balOpen: view.balanceOpen, bal: view.holdings, mined: o.minedToday, pnl: r.pnl, pnlPct: r.pnlPct, value: r.valueNow, at: Date.now() };
+    const kept = Object.keys(days).sort().slice(-PNL_KEEP_DAYS);
+    log[k] = Object.fromEntries(kept.map(d => [d, days[d]]));
+    await localStore.set(K_PNL, log);
+  }
+  return view;
+}
+
+/** The local daily P&L log of the current wallet, newest first. */
+export async function pnlHistory(): Promise<PnlDay[]> {
+  const s = await requireSession();
+  const { fiat } = await getSettings();
+  if (fiat === 'off') return [];
+  const days = (await readPnlLog())[pnlKey(s.walletId, fiat)] ?? {};
+  // stored data is re-validated on every read
+  return Object.values(days)
+    .filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d.day) && finite(d.pnl) && finite(d.value) && finite(d.open) && finite(d.close) && grains(d.bal) && grains(d.balOpen) && grains(d.mined))
+    .sort((a, b) => (a.day < b.day ? 1 : -1));
 }
 
 const clampFee = (v: number | null) => (v === null ? null : Math.min(Math.max(Math.round(v * 100) / 100, MIN_RELAY_FEE_PER_VB), MAX_SANE_FEE_PER_VB));
@@ -760,6 +879,8 @@ export async function deleteWallet(id: string, password: string) {
   const entry = await entryById(id);
   await decryptWallet(entry, password); // proves possession
   await writeVault((await readVault()).filter(e => e.id !== id));
+  const log = await readPnlLog();
+  await localStore.set(K_PNL, Object.fromEntries(Object.entries(log).filter(([k]) => !k.startsWith(`${id}:`))));
   const s = (await sessionStore.get(K_SESSION)) as Session | undefined;
   if (s?.walletId === id) await lock();
   if ((await lastWalletId()) === id) await localStore.remove(K_LAST);

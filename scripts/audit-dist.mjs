@@ -70,7 +70,7 @@ const JS_RULES = [
   [/__bb\//, 'dev indexer proxy path'],
   [/localhost:\d+/, 'localhost URL'],
   [/\/Users\/|\/home\/runner\/|C:\\\\Users\\\\/, 'absolute local path'],
-  [/https?:\/\/(?!www\.w3\.org\/|blockbook\.pearlresearch\.ai|blockbook\.testnet\.pearlresearch\.ai|explorer\.pearlresearch\.ai\/|example\.(?:org|com|net)\/|github\.com\/akoya-wallet\/|reactjs\.org\/docs\/error-decoder|react\.dev\/errors\/|[a-z0-9-]+\.example\b)[a-z0-9.-]+\.[a-z]{2,}/i, 'unexpected remote URL'],
+  [/https?:\/\/(?!www\.w3\.org\/|blockbook\.pearlresearch\.ai|blockbook\.testnet\.pearlresearch\.ai|explorer\.pearlresearch\.ai\/|api\.coingecko\.com\/api\/v3|example\.(?:org|com|net)\/|github\.com\/akoya-wallet\/|reactjs\.org\/docs\/error-decoder|react\.dev\/errors\/|[a-z0-9-]+\.example\b)[a-z0-9.-]+\.[a-z]{2,}/i, 'unexpected remote URL'],
 ];
 // Known, reviewed occurrences inside third-party code. A ratchet: any *new* occurrence fails.
 const ALLOWED_COUNTS = new Map([

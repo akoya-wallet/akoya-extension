@@ -1,0 +1,38 @@
+# Akoya's Nockchain helper, compiled to WebAssembly.
+#
+# Deliberately tiny: three pure functions (seed → public key, public key → address, address →
+# note "first names" for balance lookups). No signing, no transaction building, no networking.
+# The cryptography (Cheetah curve, Tip5 hash, SLIP-10-style key derivation) comes from NockBox's
+# iris-rs at a pinned commit — the same code the Iris wallet ships — not from Akoya.
+#
+# Built reproducibly by scripts/build-nock-wasm.sh; CI rebuilds it from source and checks the
+# vendored output in src/nock/wasm/ is byte-identical.
+
+[package]
+name = "akoya-nock"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+rust-version = "1.91"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+iris-crypto = { git = "https://github.com/nockbox/iris-rs", rev = "a0a213790cfbd154c11570f2ea6fba540234b0cc", default-features = false, features = ["alloc"] }
+iris-ztd = { git = "https://github.com/nockbox/iris-rs", rev = "a0a213790cfbd154c11570f2ea6fba540234b0cc", default-features = false, features = ["alloc"] }
+iris-nockchain-types = { git = "https://github.com/nockbox/iris-rs", rev = "a0a213790cfbd154c11570f2ea6fba540234b0cc" }
+wasm-bindgen = "=0.2.105"
+
+[dev-dependencies]
+bs58 = "0.5"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = false
+strip = true
+incremental = false

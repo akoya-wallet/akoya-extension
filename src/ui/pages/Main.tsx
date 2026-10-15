@@ -5,6 +5,7 @@ import * as W from '../../ext/wallet.ts';
 import { openTab } from '../../ext/platform.ts';
 import { FIAT_LABEL, PRICE_SOURCE } from '../../ext/price.ts';
 import { MiningCard, MiningSheet, type PoolState } from './Mining.tsx';
+import { NockCard, NockSheet, type NockState } from './Nock.tsx';
 import { clockTime, dayKey, formatDay, formatFiat, formatPct, formatPrl, shortAddr, shortTxid } from '../../ext/format.ts';
 import type { Overview, PnlDay, PnlView, SessionInfo, TxItem, WalletMeta } from '../../ext/types.ts';
 import { useI18n } from '../../i18n/index.tsx';
@@ -124,7 +125,22 @@ export function MainShell({
   const [pnlOpen, setPnlOpen] = useState(false);
   const [pool, setPool] = useState<PoolState>({ cfg: null });
   const [miningOpen, setMiningOpen] = useState(false);
+  const [nock, setNock] = useState<NockState>({ cfg: null });
+  const [nockOpen, setNockOpen] = useState(false);
   const copy = useCopy();
+
+  const loadNock = async () => {
+    if (session.network !== 'mainnet') return;
+    try {
+      const cfg = await W.nockConfig();
+      if (!cfg.address) return setNock({ cfg });
+      setNock(prev => ({ ...prev, cfg }));
+      setNock({ cfg, ov: (await W.nockOverview()) ?? undefined });
+    } catch (e) {
+      if (e instanceof W.LockedError) return;
+      setNock(prev => (prev.ov ? prev : { ...prev, error: e }));
+    }
+  };
 
   const loadPool = async () => {
     if (session.network !== 'mainnet') return;
@@ -166,6 +182,7 @@ export function MainShell({
       if (o.page === 1) {
         void loadPnl(o);
         void loadPool();
+        void loadNock();
       }
     } catch (e) {
       if (e instanceof W.LockedError) return onLock();
@@ -179,6 +196,7 @@ export function MainShell({
     // know up front whether a price line is coming, so the hero doesn't jump when it arrives
     setPnl({ kind: 'loading' });
     setPool({ cfg: null });
+    setNock({ cfg: null });
     void W.getSettings().then(st => {
       const kind = session.network !== 'mainnet' ? 'unsupported' : st.fiat === 'off' ? 'off' : null;
       if (kind) setPnl(prev => (prev.kind === 'loading' ? { kind } : prev));
@@ -237,6 +255,7 @@ export function MainShell({
               onOpen={() => setMiningOpen(true)}
               onChanged={() => void loadPool()}
             />
+            <NockCard state={nock} onOpen={() => setNockOpen(true)} />
             <div className="section-title">
               <span>{t('home.recent')}</span>
               {ov && ov.txCount > 0 && <button className="link-btn" onClick={() => setTab('activity')}>{t('home.see_all', { count: ov.txCount })}</button>}
@@ -277,6 +296,7 @@ export function MainShell({
         </Sheet>
       )}
       {pnlOpen && pnl.kind === 'ok' && <PnlSheet view={pnl.view} onClose={() => setPnlOpen(false)} />}
+      {nockOpen && nock.cfg?.address && <NockSheet address={nock.cfg.address} ov={nock.ov} onClose={() => setNockOpen(false)} />}
       {miningOpen && pool.stats && (
         <MiningSheet stats={pool.stats} price={pnl.kind === 'ok' ? pnl.view : null} onClose={() => setMiningOpen(false)} onSettings={() => onSettings('pool')} />
       )}

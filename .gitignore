@@ -15,3 +15,6 @@ release/
 
 # org-level files, pushed to akoya-wallet/.github separately
 org/
+
+# Rust build output (the WebAssembly that ships is vendored in src/nock/wasm/)
+nock/target/

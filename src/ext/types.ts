@@ -193,6 +193,29 @@ export interface Settings {
   language: Language;
   /** fiat price & P&L — off by default because it contacts a third party (CoinGecko) */
   fiat: Fiat | 'off';
+  /** Nockchain gRPC-web endpoint (used only by wallets with NOCK turned on) */
+  nockRpc: string;
+}
+
+/** Nockchain (NOCK) for the current wallet — opt-in, read-only (balance + receive). */
+export interface NockConfig {
+  /** NOCK v1 address derived from this wallet's recovery phrase, or null when off */
+  address: string | null;
+  rpc: string;
+  /** NOCK is only offered for Mainnet wallets */
+  available: boolean;
+}
+
+export interface NockOverview {
+  address: string;
+  /** nicks (1 NOCK = 65,536 nicks) */
+  spendable: string;
+  /** mining rewards still inside the 100-block coinbase timelock, nicks */
+  immature: string;
+  notes: number;
+  height: string;
+  rpcHost: string;
+  updatedAt: number;
 }
 
 /** Mining-pool link of the current wallet (opt-in). */

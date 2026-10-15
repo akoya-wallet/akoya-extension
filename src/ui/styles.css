@@ -275,3 +275,7 @@ body.tab #root { width: 400px; height: 660px; border-radius: 22px; border: 1px s
 .epochs .kv { padding: 6px 0; font-size: 12px; }
 .gpu-list { margin: 4px 4px 6px 14px; padding: 0 10px; border-left: 2px solid var(--line); }
 .gpu-list .kv { padding: 5px 0; font-size: 12px; }
+
+/* ---------- nockchain ---------- */
+.nock-card { margin: 4px 0 6px; }
+.item .tx-ic.nock { color: var(--accent); background: rgba(197, 193, 253, 0.14); font-weight: 700; font-size: 15px; }

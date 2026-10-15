@@ -215,6 +215,49 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  nock-wasm:
+    # The Nockchain helper ships as committed WebAssembly (src/nock/wasm). Rebuild it here from the
+    # Rust source (nock/ + iris-rs at a pinned commit) with the pinned toolchain, and fail unless it
+    # is byte-identical — so what ships is provably what the source says.
+    name: nock-wasm
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read # checkout only
+    steps:
+      - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: block
+          disable-sudo-and-containers: true
+          allowed-endpoints: >
+            github.com:443
+            codeload.github.com:443
+            static.rust-lang.org:443
+            index.crates.io:443
+            static.crates.io:443
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Rust toolchain from nock/rust-toolchain.toml (1.91.0 + wasm32)
+        working-directory: nock
+        run: rustup toolchain install && rustc --version
+
+      - name: wasm-bindgen-cli 0.2.105 (crates.io, --locked)
+        run: |
+          cargo +1.91.0 install wasm-bindgen-cli --version 0.2.105 --locked --root "$RUNNER_TEMP/wasm-bindgen"
+          echo "$RUNNER_TEMP/wasm-bindgen/bin" >> "$GITHUB_PATH"
+
+      - name: Rust tests (addresses must match the official nockchain-wallet)
+        working-directory: nock
+        run: cargo test --release --locked
+
+      - name: Rebuild src/nock/wasm from source — must be byte-identical to the committed files
+        run: |
+          bash scripts/build-nock-wasm.sh
+          git diff --exit-code -- src/nock/wasm
+
   reproducible:
     name: reproducible
     needs: verify

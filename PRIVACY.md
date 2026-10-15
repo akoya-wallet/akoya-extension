@@ -21,6 +21,7 @@ implements everything below is public at <https://github.com/akoya-wallet/akoya-
 | Wallet name, network, derivation mode, account public key (xpub) | `chrome.storage.local` | Not encrypted. Public data: it cannot spend funds, but reveals balances and history to someone with access to your browser profile. |
 | Settings (language, auto-lock, RPC nodes, block explorers, display currency) | `chrome.storage.local` | Not sensitive. |
 | Addresses of mining pools that paid you | `chrome.storage.local` | Public blockchain data, used to label mining income. |
+| NOCK address (only if you turn on **Nockchain**): the public Nockchain address derived from your recovery phrase | `chrome.storage.local` | Public. Re-checked against your recovery phrase on every unlock. Deleted with the wallet. |
 | Mining-pool link (only if you link a pool): the pool and the address you mine to, per wallet | `chrome.storage.local` | Not sensitive. Deleted with the wallet. |
 | Daily P&L log (only if you turn on **Price & P&L**): per day, the PRL price, your holdings, PRL mined and the resulting profit/loss, kept for 90 days | `chrome.storage.local` | Not encrypted, like the xpub above. Never transmitted. Deleted with the wallet. |
 | Unlocked session (wallet id and xpub) | `chrome.storage.session` | Memory only, cleared when the browser closes or the wallet locks. |
@@ -54,6 +55,11 @@ The extension only connects to:
    address you looked up. Chrome asks you to allow access to that one site first. The pool's
    response also lists your rigs' IP addresses; the extension ignores them and never stores or
    shows them.
+5. **A Nockchain node, only if you turn on Nockchain (NOCK)** (off by default; Settings →
+   Nockchain). By default `rpc.nockbox.org`, operated by NockBox Inc.; you can set your own. To show
+   your NOCK balance the extension sends the node lookup keys derived from your NOCK address (note
+   "first-names"), without cookies. The node can link them to your address and sees your IP
+   address. Your recovery phrase and keys are never sent.
 
 Nothing else is contacted. The extension does not use cookies and does not load remote code.
 

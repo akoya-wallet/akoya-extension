@@ -11,10 +11,11 @@ import type { Explorer, Fiat, IndexerStatus, Language, SessionInfo, Settings as 
 import { LANGUAGES, useI18n } from '../../i18n/index.tsx';
 import { Btn, Kv, Notice, PasswordField, Topbar, useToast } from '../components/common.tsx';
 import { PoolSettings } from './Mining.tsx';
+import { NockSettings } from './Nock.tsx';
 import { poolById } from '../../ext/pool.ts';
 import { IconChevron, IconExternal, IconEye, IconLock, IconPlus } from '../components/icons.tsx';
 
-type Sub = null | 'reveal' | 'password' | 'indexers' | 'explorers' | 'about' | 'delete' | 'rename' | 'pool';
+type Sub = null | 'reveal' | 'password' | 'indexers' | 'explorers' | 'about' | 'delete' | 'rename' | 'pool' | 'nock';
 
 function Row({ label, value, onClick, danger }: { label: string; value?: string; onClick: () => void; danger?: boolean }) {
   return (
@@ -46,6 +47,7 @@ export function Settings({ session, initialSub, onBack, onLock, onDeleted, onRen
   const { t, lang, setLang } = useI18n();
   const [sub, setSub] = useState<Sub>(initialSub ?? null);
   const [poolName, setPoolName] = useState('');
+  const [nockOn, setNockOn] = useState(false);
   const [settings, setSettings] = useState<S | null>(null);
   const [explorerName, setExplorerName] = useState('');
   useEffect(() => void W.getSettings().then(setSettings), [sub]);
@@ -54,7 +56,10 @@ export function Settings({ session, initialSub, onBack, onLock, onDeleted, onRen
   }, [sub, session.network]);
 
   useEffect(() => {
-    if (session.network === 'mainnet') void W.poolConfig().then(c => setPoolName(c.pool ? poolById(c.pool)?.name ?? '' : t('pool.off')));
+    if (session.network === 'mainnet') {
+      void W.poolConfig().then(c => setPoolName(c.pool ? poolById(c.pool)?.name ?? '' : t('pool.off')));
+      void W.nockConfig().then(c => setNockOn(!!c.address));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sub, session.network]);
 
@@ -67,6 +72,7 @@ export function Settings({ session, initialSub, onBack, onLock, onDeleted, onRen
   if (sub === 'delete') return <Delete session={session} onBack={back} onDeleted={onDeleted} />;
   if (sub === 'rename') return <Rename session={session} onBack={back} onDone={onRenamed} />;
   if (sub === 'pool') return <PoolSettings session={session} onBack={back} />;
+  if (sub === 'nock') return <NockSettings session={session} onBack={back} onLocked={onLock} />;
 
   return (
     <div className="screen">
@@ -109,6 +115,7 @@ export function Settings({ session, initialSub, onBack, onLock, onDeleted, onRen
           <Row label={t('settings.backup')} onClick={() => setSub('reveal')} />
           <Row label={t('settings.change_password')} onClick={() => setSub('password')} />
           {session.network === 'mainnet' && <Row label={t('settings.pool')} value={poolName} onClick={() => setSub('pool')} />}
+          {session.network === 'mainnet' && <Row label={t('settings.nock')} value={nockOn ? t('nock.on') : t('nock.off')} onClick={() => setSub('nock')} />}
           <Row label={t('settings.derivation')} value={session.mode === 'oyster' ? t('mode.oyster') : t('mode.standard')} onClick={() => setSub('about')} />
         </div>
 

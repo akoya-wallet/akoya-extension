@@ -27,6 +27,7 @@ Akoya is an open-source, self-custodial wallet for Pearl (PRL), the Proof-of-Use
 • Create a new wallet or import your recovery phrase (BIP39) — including phrases from the official Pearl Wallet / oyster. Akoya derives exactly the same addresses, including oyster's non-standard derivation.
 • Receive with a QR code, send to Taproot or post-quantum P2MR addresses, and review the complete transaction (recipient, amount, fee, change) before you sign.
 • Built for miners: pool payouts and coinbase rewards are labelled as mining income, with a daily total and maturity tracking.
+• Optional: Nockchain (NOCK), read-only — the same recovery phrase shows your NOCK balance and receive address.
 • Optional: link your Pearlhash pool account to see your rigs, per-GPU hashrate (slow cards highlighted) and pending rewards.
 • Optional: see your holdings' value and today's profit/loss (price move + mining income) in USD, CNY, EUR and more — or in sats. Off by default; prices come from CoinGecko and no wallet data is sent.
 • Multiple wallets, Mainnet and Testnet2, English and 简体中文.
@@ -51,6 +52,7 @@ Akoya 是 Pearl (PRL) 的开源自托管钱包。
 • 创建新钱包，或导入 BIP39 助记词——包括官方 Pearl Wallet / oyster 的助记词。Akoya 的地址与官方钱包完全一致（含 oyster 的非标准派生）。
 • 二维码收款；发送到 Taproot 或抗量子 P2MR 地址；签名前完整展示收款地址、金额、手续费和找零。
 • 为矿工设计：矿池结算和出块奖励显示为挖矿收益，并统计今日收益、跟踪成熟度。
+• 可选：Nockchain (NOCK) 只读——同一套助记词查看 NOCK 余额和收款地址。
 • 可选：关联 Pearlhash 矿池账户，查看矿机、每张 GPU 的算力（自动标出偏慢的卡）和待结算收益。
 • 可选：显示持仓价值和今日盈亏（价格涨跌 + 挖矿收益），支持美元、人民币、欧元等，也可以用 sats 计价。默认关闭；价格来自 CoinGecko，不发送任何钱包数据。
 • 多钱包、主网 / Testnet2、英文 / 简体中文。
@@ -87,7 +89,7 @@ Akoya 由独立团队 PRLFlipBTC 开发，非 Pearl Research Labs 官方产品�
 **Single purpose**
 
 ```
-Akoya is a self-custody wallet for the Pearl (PRL) cryptocurrency: create or import a wallet, view balance and transaction history, and receive and send PRL.
+Akoya is a self-custody cryptocurrency wallet for Pearl (PRL): create or import a wallet, view balance and transaction history, and receive and send PRL. Optionally, the same recovery phrase can show a read-only Nockchain (NOCK) balance and receive address.
 ```
 
 **Permission justifications**
@@ -107,7 +109,8 @@ Optional host permission `https://*/*`
 Never granted at install. Requested at runtime only when the user adds their own RPC node or links their mining pool (Pearlhash) in Settings, and only for that single origin (chrome.permissions.request with that origin). The pool is asked for the stats of the user's mining address (rigs, hashrate, pending rewards); its API sends no CORS headers, so host access is required.
 ```
 
-**Remote code:** `No, I am not using remote code.`
+**Remote code:** `No, I am not using remote code.` (The Nockchain helper is WebAssembly bundled
+inside the package — built from the open-source `nock/` directory — not loaded from anywhere.)
 
 **Data usage** — tick:
 

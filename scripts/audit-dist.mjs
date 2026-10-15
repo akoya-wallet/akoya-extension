@@ -5,6 +5,7 @@
 //   - the JS bundle has no eval / new Function / remote script loading / dev hooks / local paths
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
+import { createHash } from 'node:crypto';
 
 const DIST = process.argv[2] ?? 'dist';
 const errors = [];
@@ -24,21 +25,32 @@ for (const key of ['content_scripts', 'background', 'externally_connectable', 'w
 }
 const csp = m.content_security_policy?.extension_pages ?? '';
 if (!csp) fail('missing content_security_policy.extension_pages');
-for (const bad of ["'unsafe-eval'", "'unsafe-inline'", "'wasm-unsafe-eval'", 'http:', ' * ', "'unsafe-hashes'"]) {
+for (const bad of ["'unsafe-eval'", "'unsafe-inline'", 'http:', ' * ', "'unsafe-hashes'"]) {
   if (csp.includes(bad)) fail(`CSP contains ${bad}`);
 }
+// 'wasm-unsafe-eval' lets the page compile WebAssembly (never JS eval); the only module it may
+// compile is the Nockchain helper, checked byte-for-byte below.
 const scriptSrc = /script-src ([^;]*)/.exec(csp)?.[1]?.trim();
-if (scriptSrc !== "'self'") fail(`CSP script-src must be exactly 'self', got "${scriptSrc}"`);
+if (scriptSrc !== "'self' 'wasm-unsafe-eval'") fail(`CSP script-src must be exactly 'self' 'wasm-unsafe-eval', got "${scriptSrc}"`);
 if (!/object-src 'none'/.test(csp)) fail("CSP must set object-src 'none'");
 
 // ---- files
 const files = [];
 const walk = d => readdirSync(d).forEach(f => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : files.push(join(d, f))));
 walk(DIST);
-const ALLOWED_EXT = new Set(['.html', '.js', '.css', '.json', '.png']);
+const ALLOWED_EXT = new Set(['.html', '.js', '.css', '.json', '.png', '.wasm']);
 for (const f of files) {
   if (!ALLOWED_EXT.has(extname(f))) fail(`unexpected file type in dist: ${f}`);
   if (f.endsWith('.map')) fail(`source map in dist: ${f}`);
+}
+
+// ---- WebAssembly: exactly one module, identical to src/nock/wasm (which CI rebuilds from source)
+const wasmFiles = files.filter(f => extname(f) === '.wasm');
+const vendored = /^([0-9a-f]{64})\s+akoya_nock_bg\.wasm$/m.exec(readFileSync('src/nock/wasm/SHA256SUMS', 'utf8'))?.[1];
+if (wasmFiles.length !== 1) fail(`expected exactly one .wasm in dist, found ${wasmFiles.length}`);
+for (const f of wasmFiles) {
+  const h = createHash('sha256').update(readFileSync(f)).digest('hex');
+  if (!vendored || h !== vendored) fail(`${f} does not match src/nock/wasm/SHA256SUMS`);
 }
 
 // ---- html: only the bundled module script, no inline code, no remote resources
@@ -70,7 +82,7 @@ const JS_RULES = [
   [/__bb\//, 'dev indexer proxy path'],
   [/localhost:\d+/, 'localhost URL'],
   [/\/Users\/|\/home\/runner\/|C:\\\\Users\\\\/, 'absolute local path'],
-  [/https?:\/\/(?!www\.w3\.org\/|blockbook\.pearlresearch\.ai|blockbook\.testnet\.pearlresearch\.ai|explorer\.pearlresearch\.ai\/|api\.coingecko\.com\/api\/v3|pearlhash\.xyz\/(?:api\/)?account\/|example\.(?:org|com|net)\/|github\.com\/akoya-wallet\/|reactjs\.org\/docs\/error-decoder|react\.dev\/errors\/|[a-z0-9-]+\.example\b)[a-z0-9.-]+\.[a-z]{2,}/i, 'unexpected remote URL'],
+  [/https?:\/\/(?!www\.w3\.org\/|blockbook\.pearlresearch\.ai|blockbook\.testnet\.pearlresearch\.ai|explorer\.pearlresearch\.ai\/|api\.coingecko\.com\/api\/v3|pearlhash\.xyz\/(?:api\/)?account\/|rpc\.nockbox\.org\b|example\.(?:org|com|net)\/|github\.com\/akoya-wallet\/|reactjs\.org\/docs\/error-decoder|react\.dev\/errors\/|[a-z0-9-]+\.example\b)[a-z0-9.-]+\.[a-z]{2,}/i, 'unexpected remote URL'],
 ];
 // Known, reviewed occurrences inside third-party code. A ratchet: any *new* occurrence fails.
 const ALLOWED_COUNTS = new Map([

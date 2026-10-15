@@ -1,7 +1,7 @@
 // Store screenshot harness (dev only — never part of the extension build).
 // Renders the real UI with demo data: the public "abandon … about" test wallet and a stubbed
 // indexer, so no real person's addresses or balances appear in marketing images.
-//   http://localhost:5199/store/shots/index.html?scene=home|receive|send|nodes|zh|pnl|mining|promo|marquee
+//   http://localhost:5199/store/shots/index.html?scene=home|receive|send|nodes|zh|pnl|mining|nock|promo|marquee
 //   optional &fiat=off|usd|cny|sats (prices are stubbed too — no request leaves the page)
 import { createRoot } from 'react-dom/client';
 import { App } from '../../src/ui/App.tsx';
@@ -11,6 +11,7 @@ import { deriveAccount, seedBytes, AddressBook } from '../../src/core/account.ts
 import { NETWORKS } from '../../src/core/networks.ts';
 import { bech32m } from '../../src/core/encoding.ts';
 import { localStore, sessionStore } from '../../src/ext/platform.ts';
+import { firstNames } from '../../src/nock/index.ts';
 import lockup from '../../brand/png/lockup-white.png';
 import mark from '../../brand/svg/akoya-mark-pearl.svg';
 
@@ -37,6 +38,7 @@ const COPY: Record<string, { title: string; sub: string }> = {
   nodes: { title: 'Your node, your explorer', sub: 'Pick or add your own RPC nodes and block explorers. Live height and latency at a glance.' },
   zh: { title: 'English & 简体中文', sub: 'Switch languages any time. Open source, reproducible builds, no tracking.' },
   pnl: { title: 'Know your day', sub: 'Optional fiat value and daily P&L — price moves and mining income, logged on your device.' },
+  nock: { title: 'Your NOCK, same phrase', sub: 'Turn on Nockchain to see your NOCK balance and receive address — the same address the official Nockchain wallet gives you.' },
   mining: { title: 'Your rigs, at a glance', sub: 'Link your Pearlhash account to see rigs, hashrate, pending rewards — and spot a throttling GPU.' },
 };
 
@@ -72,6 +74,21 @@ function demoPool() {
     ],
   };
 }
+
+// demo gRPC-web answer for the Nockchain node (WalletGetBalanceResponse, protobuf)
+function demoNock(body: Uint8Array): Response {
+  const vint = (n: bigint | number) => { let v = BigInt(n); const o: number[] = []; while (v > 0x7fn) { o.push(Number(v & 0x7fn) | 0x80); v >>= 7n; } o.push(Number(v)); return o; };
+  const len = (no: number, b: number[]) => [...vint((no << 3) | 2), ...vint(b.length), ...b];
+  const wrap = (no: number, v: bigint | number) => len(no, [...vint(8), ...vint(v)]);
+  const note = (nicks: bigint, page: number) => len(2, [...len(1, []), ...len(2, [...wrap(2, page), ...wrap(5, nicks)])]);
+  const coinbase = new TextDecoder().decode(body).includes(nockCoinbaseName);
+  const notes = coinbase ? [note(65536n * 52n + 21000n, 165560)] : [note(65536n * 1201n + 40000n, 164936), note(65536n * 31n, 165100)];
+  const msg = len(1, [...notes.flatMap(n => len(1, n)), ...wrap(2, 165579)]);
+  const frame = (flag: number, b: number[]) => [flag, (b.length >>> 24) & 255, (b.length >>> 16) & 255, (b.length >>> 8) & 255, b.length & 255, ...b];
+  return new Response(Uint8Array.from([...frame(0, msg), ...frame(0x80, [...new TextEncoder().encode('grpc-status: 0\r\n')])]), { status: 200 });
+}
+let nockCoinbaseName = '';
+const NOCK_DEMO = '3zxKWhhd8HY9pT2ZCZNUSEz2XWwSk15P2sD3atnnnxRtHa2Ta1H4jRy'; // public test phrase "abandon … about"
 
 async function setup() {
   const a = deriveAccount(await seedBytes(ABANDON), net, 'oyster');
@@ -122,8 +139,12 @@ async function setup() {
   ];
   const xpubA = encodeURIComponent(`tr(${a.xpub})`);
 
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const u = String(input);
+  const realFetch = globalThis.fetch.bind(globalThis);
+  nockCoinbaseName = (await firstNames(NOCK_DEMO))[1];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const u = String(input instanceof Request ? input.url : input);
+    if (u.endsWith('.wasm') || u.includes('.wasm?')) return realFetch(input, init); // the app's own WebAssembly
+    if (u.startsWith('https://rpc.nockbox.org/')) return demoNock(new Uint8Array(init!.body as ArrayBuffer));
     let body: unknown = { error: 'unexpected' };
     if (/\/api\/v2$/.test(u)) body = { blockbook: { coin: 'Pearl', bestHeight: 127806, inSync: true }, backend: { chain: 'mainnet' } };
     else if (u.includes('/api/v2/xpub/') && u.includes(xpubA)) {
@@ -164,6 +185,7 @@ async function setup() {
   await localStore.set('vault.v1', [entry(idA, 'Mining Rig', a.xpub, 1), entry('22222222-2222-4222-8222-222222222222', 'Savings', z.xpub, 2)]);
   await localStore.set('settings.v1', { language: scene === 'zh' ? 'zh-CN' : 'en', fiat });
   await localStore.set('miningSenders.v1', [POOL]);
+  if (params.get('nock') !== 'off' && (scene === 'home' || scene === 'nock' || scene === 'zh')) await localStore.set('nock.v1', { [idA]: { address: NOCK_DEMO } });
   if (params.get('pool') !== 'off' && (scene === 'home' || scene === 'mining' || scene === 'zh')) await localStore.set('pool.v1', { [idA]: { pool: 'pearlhash', address: r0, dismissed: true } });
   await sessionStore.set('session.v1', { walletId: idA, name: 'Mining Rig', network: 'mainnet', mode: 'oyster', xpub: a.xpub, lastActive: Date.now() });
 }
@@ -186,6 +208,11 @@ async function drive() {
     await until(() => !!document.querySelector('.hero-pnl'));
     (document.querySelector('.hero-pnl') as HTMLElement).click();
     await until(() => !!document.querySelector('.pnl-big'));
+  }
+  if (scene === 'nock') {
+    await until(() => !!document.querySelector('.nock-card .amt')?.textContent?.match(/\d/));
+    (document.querySelector('.nock-card') as HTMLElement).click();
+    await until(() => !!document.querySelector('.sheet svg'));
   }
   if (scene === 'mining') {
     await until(() => !!document.querySelector('.mining-card:not(:disabled)'));

@@ -27,6 +27,8 @@ import { formatPrl, parsePrl } from './format.ts';
 import { indexerFetch, localStore, sessionStore } from './platform.ts';
 import { FIATS, priceAt, spot } from './price.ts';
 import { fetchPoolStats, poolById, type PoolStats } from './pool.ts';
+import { deriveAddress as deriveNockAddress, firstNames as nockFirstNames, looksLikeNockAddress } from '../nock/index.ts';
+import { DEFAULT_NOCK_RPC, normalizeNockRpc, notesByFirstName } from './nockrpc.ts';
 import type {
   AddressRow,
   Explorer,
@@ -38,6 +40,8 @@ import type {
   PnlDay,
   PnlView,
   PoolConfig,
+  NockConfig,
+  NockOverview,
   SeedArgs,
   SeedCheck,
   SendDraft,
@@ -55,6 +59,7 @@ const K_SESSION = 'session.v1';
 const K_LAST = 'lastWallet.v1';
 const K_PNL = 'pnl.v1';
 const K_POOL = 'pool.v1';
+const K_NOCK = 'nock.v1';
 const K_PAYOUT_ADDRS = 'payoutAddrs.v1';
 const K_PRICE_OPEN = 'priceOpen.v1';
 
@@ -83,6 +88,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoLockMinutes: 15,
   language: 'en',
   fiat: 'off',
+  nockRpc: DEFAULT_NOCK_RPC,
 };
 
 const NETWORK_IDS = Object.keys(NETWORKS) as NetworkId[];
@@ -110,6 +116,13 @@ export async function getSettings(): Promise<Settings> {
     autoLockMinutes: typeof s?.autoLockMinutes === 'number' ? Math.min(Math.max(s.autoLockMinutes, 1), 240) : 15,
     language: s?.language === 'zh-CN' ? 'zh-CN' : 'en',
     fiat: FIATS.includes(s?.fiat as Fiat) ? (s!.fiat as Fiat) : 'off',
+    nockRpc: (() => {
+      try {
+        return typeof s?.nockRpc === 'string' ? normalizeNockRpc(s.nockRpc) : DEFAULT_NOCK_RPC;
+      } catch {
+        return DEFAULT_NOCK_RPC;
+      }
+    })(),
   };
   for (const id of NETWORK_IDS) {
     const wanted = s?.explorer?.[id];
@@ -390,6 +403,7 @@ export async function unlock(id: string, password: string): Promise<SessionInfo>
   const entry = await entryById(id);
   const secret = await decryptWallet(entry, password);
   const { xpub } = await xpubFor(secret.secret, secret.passphrase, entry.network, entry.mode);
+  await verifyNockAddress(id, secret.secret);
   if (entry.xpub !== xpub) {
     // backfill for older entries, and repair if the clear-text copy was ever altered
     const vault = await readVault();
@@ -757,6 +771,104 @@ export async function poolStats(): Promise<PoolStats | null> {
   return fetchPoolStats(poolById(c.pool)!, c.address);
 }
 
+// ---------------------------------------------------------------- Nockchain (NOCK), read-only
+//
+// Opt-in per wallet (Settings → Nockchain). The same recovery phrase derives the NOCK master
+// address exactly as the official nockchain-wallet and Iris do (BIP39 seed without passphrase →
+// Cheetah master key → Tip5 hash). Derivation needs the seed, so it asks for the password and runs
+// in a throwaway worker (src/nock). Only the public address is kept; like the xpub, it is
+// re-derived and repaired on every unlock, so a tampered receive address can't survive.
+
+const NOCK_COINBASE_TIMELOCK = 100n;
+
+async function readNockLinks(): Promise<Record<string, { address?: string }>> {
+  const v = await localStore.get(K_NOCK);
+  return v && typeof v === 'object' ? (v as Record<string, { address?: string }>) : {};
+}
+
+/** NOCK seed: the recovery phrase's BIP39 seed with an empty passphrase, like the official wallets. */
+async function nockSeed(secret: string): Promise<Uint8Array> {
+  const p = parseSeed(secret);
+  if (p.kind !== 'mnemonic') throw new WalletError('nock.needs_mnemonic');
+  return seedBytes(p.normalized, '');
+}
+
+async function verifyNockAddress(walletId: string, secret: string) {
+  const links = await readNockLinks();
+  const link = links[walletId];
+  if (!link) return;
+  let address: string | null = null;
+  try {
+    address = await deriveNockAddress(await nockSeed(secret));
+  } catch {
+    // can't verify → don't keep showing a receive address we can't vouch for
+  }
+  if (address === link.address) return;
+  if (address) links[walletId] = { address };
+  else delete links[walletId];
+  await localStore.set(K_NOCK, links);
+}
+
+export async function nockConfig(): Promise<NockConfig> {
+  const s = await requireSession();
+  const { nockRpc } = await getSettings();
+  const a = (await readNockLinks())[s.walletId]?.address;
+  return { address: typeof a === 'string' && looksLikeNockAddress(a) ? a : null, rpc: nockRpc, available: s.network === 'mainnet' };
+}
+
+/** Turns NOCK on for the current wallet: password → seed → address (in a throwaway worker). */
+export async function enableNock(password: string): Promise<NockConfig> {
+  const s = await requireSession();
+  if (s.network !== 'mainnet') throw new WalletError('nock.mainnet_only');
+  const { secret } = await decryptWallet(await entryById(s.walletId), password);
+  const address = await deriveNockAddress(await nockSeed(secret));
+  const links = await readNockLinks();
+  links[s.walletId] = { address };
+  await localStore.set(K_NOCK, links);
+  return nockConfig();
+}
+
+export async function disableNock(): Promise<NockConfig> {
+  const s = await requireSession();
+  const links = await readNockLinks();
+  delete links[s.walletId];
+  await localStore.set(K_NOCK, links);
+  return nockConfig();
+}
+
+export async function setNockRpc(url: string): Promise<Settings> {
+  return setSettings({ nockRpc: normalizeNockRpc(url) });
+}
+
+/** NOCK balance of the current wallet's address; null when NOCK is off. Cached for a minute. */
+export async function nockOverview(): Promise<NockOverview | null> {
+  const c = await nockConfig();
+  if (!c.address || !c.available) return null;
+  const key = `nockBal.v1:${c.address}:${c.rpc}`;
+  const cached = (await sessionStore.get(key)) as NockOverview | undefined;
+  if (cached && Date.now() - cached.updatedAt < 60_000) return cached;
+  const [simpleName, coinbaseName] = await nockFirstNames(c.address);
+  const [simple, coinbase] = await Promise.all([notesByFirstName(c.rpc, simpleName), notesByFirstName(c.rpc, coinbaseName)]);
+  const height = simple.height > coinbase.height ? simple.height : coinbase.height;
+  let spendable = simple.notes.reduce((a, n) => a + n.nicks, 0n);
+  let immature = 0n;
+  for (const n of coinbase.notes) {
+    if (height >= n.originPage + NOCK_COINBASE_TIMELOCK) spendable += n.nicks;
+    else immature += n.nicks;
+  }
+  const out: NockOverview = {
+    address: c.address,
+    spendable: spendable.toString(),
+    immature: immature.toString(),
+    notes: simple.notes.length + coinbase.notes.length,
+    height: height.toString(),
+    rpcHost: new URL(c.rpc).host,
+    updatedAt: Date.now(),
+  };
+  await sessionStore.set(key, out);
+  return out;
+}
+
 /** The local daily P&L log of the current wallet, newest first. */
 export async function pnlHistory(): Promise<PnlDay[]> {
   const s = await requireSession();
@@ -953,6 +1065,9 @@ export async function deleteWallet(id: string, password: string) {
   const links = await readPoolLinks();
   delete links[id];
   await localStore.set(K_POOL, links);
+  const nock = await readNockLinks();
+  delete nock[id];
+  await localStore.set(K_NOCK, nock);
   const s = (await sessionStore.get(K_SESSION)) as Session | undefined;
   if (s?.walletId === id) await lock();
   if ((await lastWalletId()) === id) await localStore.remove(K_LAST);

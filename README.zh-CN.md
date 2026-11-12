@@ -16,7 +16,7 @@ Akoya（阿古屋珍珠）是 **Pearl (PRL)** 的自托管 Chrome 插件钱包�
 
 > **状态：Alpha，未经审计。** 请只放少量资金。Akoya 由独立团队 PRLFlipBTC 开发，**非 Pearl Research Labs 官方产品**。
 
-**官方源码：**<https://github.com/akoya-wallet/akoya-extension> · **官方扩展 ID：**尚未发布。在这里填上之前，任何自称 Akoya 的插件都不是我们。见 [TRADEMARKS.md](TRADEMARKS.md)。
+**官方源码：**<https://github.com/akoya-wallet/akoya-extension> · **官方扩展 ID：**`jongehkghokkejeaebipgkkichfegccp`（[Chrome 应用商店](https://chromewebstore.google.com/detail/jongehkghokkejeaebipgkkichfegccp)）。商店里 ID 不是这个的都不是我们。商店版本要等审核，可能比 GitHub 发布晚一两个版本。见 [TRADEMARKS.md](TRADEMARKS.md)。
 
 ## 功能
 

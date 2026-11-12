@@ -18,8 +18,9 @@ and every line that touches them is public and reviewable.
 > **Status: alpha, unaudited.** Use small amounts. Akoya is built by PRLFlipBTC, an independent team;
 > it is **not** affiliated with Pearl Research Labs.
 
-**Official source:** <https://github.com/akoya-wallet/akoya-extension> · **Official extension ID:** _not published yet_ — anything claiming to be Akoya before this line is filled
-in is not us. See [TRADEMARKS.md](TRADEMARKS.md).
+**Official source:** <https://github.com/akoya-wallet/akoya-extension> · **Official extension ID:** `jongehkghokkejeaebipgkkichfegccp`
+([Chrome Web Store](https://chromewebstore.google.com/detail/jongehkghokkejeaebipgkkichfegccp)) — a store listing with any other ID is not us. The store version follows GitHub
+releases after review, so it can be a version or two behind. See [TRADEMARKS.md](TRADEMARKS.md).
 
 ## Features
 

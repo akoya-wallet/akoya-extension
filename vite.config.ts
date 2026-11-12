@@ -11,7 +11,7 @@ const DEV_UPSTREAMS: Record<string, string> = {
   testnet2: 'https://blockbook.testnet.pearlresearch.ai',
 };
 // mining pools (read-only GETs)
-const DEV_POOLS: Record<string, string> = { pearlhash: 'https://pearlhash.xyz' };
+const DEV_POOLS: Record<string, string> = { pearlhash: 'https://pearlhash.xyz', peryn: 'https://app.peryn.ai' };
 
 function devIndexerProxy(): Plugin {
   return {

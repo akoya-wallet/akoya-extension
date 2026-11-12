@@ -28,7 +28,7 @@ in is not us. See [TRADEMARKS.md](TRADEMARKS.md).
 - Receive with QR code, send to Taproot or P2MR addresses, full transaction review before signing
 - Transaction history, mining-reward (coinbase) maturity tracking, pool payouts labelled as mining income
 - Optional Nockchain (NOCK), read-only: the same recovery phrase shows your NOCK balance and receive address — same address as the official Nockchain wallet and Iris
-- Optional mining-pool link (Pearlhash): rigs, per-GPU hashrate with slow-card detection, pending rewards and pool payouts — sends the pool only your mining address
+- Optional mining-pool link (Pearlhash or Peryn): rigs online/offline, hashrate with slow-rig and slow-card detection, pending rewards and pool payouts; notices when your payouts start coming from another pool — sends the pool only your mining address
 - Optional fiat value and daily P&L (USD, CNY, HKD, EUR, JPY, KRW or BTC/sats), with a local daily log — off by default, uses CoinGecko, sends no wallet data
 - Multiple wallets, Mainnet and Testnet2, user-configurable Blockbook indexers
 - Keys exist in memory only while signing; signing works fully offline

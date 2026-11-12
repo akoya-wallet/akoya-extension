@@ -1,19 +1,24 @@
 // Pool payouts (incoming payments funded by coinbase outputs) are labelled as mining income,
-// and the paying address is remembered so later payouts need no lookup.
+// and the paying address is remembered so later payouts need no lookup. This is the path for pools
+// Akoya doesn't know by name; payouts from the pools in ext/pool.ts are covered in pool.test.ts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as W from '../src/ext/wallet.ts';
 import { localStore } from '../src/ext/platform.ts';
 import { AddressBook } from '../src/core/account.ts';
 import { NETWORKS } from '../src/core/networks.ts';
+import { bech32m } from '../src/core/encoding.ts';
+import { poolBySender } from '../src/ext/pool.ts';
 import { ABANDON } from './vectors.ts';
 
-const POOL = 'prl1p50ltku2jjcwdxh4nzjrw98nwdswdn25qdkr2fdtw8hsq3qu9cdhscchnnm';
+// some pool's payout address that is not in Akoya's registry (fixed bytes, nobody's real address)
+const POOL = bech32m.encode('prl', [1, ...bech32m.toWords(Uint8Array.from({ length: 32 }, (_, i) => (i * 29 + 5) & 0xff))]);
 const OTHER = 'prl1p65h6kqgvvwh0eae8tr23dcjhuc2sqqt7zm579dp6zfmj4sfhtrysm3mpad';
 const h = (c: string) => c.repeat(64);
 const now = Math.floor(Date.now() / 1000);
 
 test('pool payouts are tagged, summed for today, and the pool is remembered', async () => {
+  assert.equal(poolBySender(POOL), undefined);
   const s = await W.createWallet({ secret: ABANDON, passphrase: '', network: 'mainnet', mode: 'oyster', name: 'Rig', password: 'test-password-1' });
   assert.equal(s.network, 'mainnet');
   const [entry] = (await localStore.get('vault.v1')) as { xpub: string }[];

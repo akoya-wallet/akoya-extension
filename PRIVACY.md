@@ -1,6 +1,6 @@
 # Akoya Privacy Policy
 
-_Last updated: 2026-10-15_
+_Last updated: 2026-11-12_
 
 Akoya is an open-source, self-custodial browser extension wallet for Pearl (PRL), published by
 PRLFlipBTC. This policy explains exactly what data the extension handles. The source code that
@@ -48,11 +48,13 @@ The extension only connects to:
    These requests contain only the coin names and the currency, never your addresses, balances,
    xpub or anything else about your wallet, and they are sent without cookies. As with any website,
    CoinGecko can see your IP address. Your fiat value and P&L are calculated on your device.
-4. **The mining pool you link, only if you link one** (off by default; currently Pearlhash,
-   `pearlhash.xyz`; Settings → Mining pool, or "Connect" on the home screen). The extension asks the
+4. **The mining pool you link, only if you link one** (off by default; Pearlhash, `pearlhash.xyz`,
+   or Peryn, `app.peryn.ai`; Settings → Mining pool, or "Connect" on the home screen). The extension
+   works out which pool pays you from your own transaction history, on your device; a pool is only
+   contacted after you link it. The extension asks the
    pool for the stats of the one address you mine to — your rigs, hashrate, pending rewards and pool
    payouts. Only that address is sent, without cookies; the pool sees your IP address and which
-   address you looked up. Chrome asks you to allow access to that one site first. The pool's
+   address you looked up. Chrome asks you to allow access to that one site first. Pearlhash's
    response also lists your rigs' IP addresses; the extension ignores them and never stores or
    shows them.
 5. **A Nockchain node, only if you turn on Nockchain (NOCK)** (off by default; Settings →

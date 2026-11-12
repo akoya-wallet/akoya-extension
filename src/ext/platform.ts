@@ -40,7 +40,7 @@ export const indexerFetch = (url: string, init?: RequestInit): Promise<Response>
   return fetch(url, init);
 };
 
-const DEV_POOL_REWRITE: Record<string, string> = { 'https://pearlhash.xyz': '/__pool/pearlhash' };
+const DEV_POOL_REWRITE: Record<string, string> = { 'https://pearlhash.xyz': '/__pool/pearlhash', 'https://app.peryn.ai': '/__pool/peryn' };
 
 /** fetch for mining-pool calls; in `vite dev` (no host permissions, no CORS) via the dev proxy */
 export const poolFetch = (url: string, init?: RequestInit): Promise<Response> => {

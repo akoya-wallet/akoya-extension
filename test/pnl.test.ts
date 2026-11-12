@@ -11,6 +11,7 @@ import * as W from '../src/ext/wallet.ts';
 import { localStore } from '../src/ext/platform.ts';
 import { AddressBook, deriveAccount, seedBytes } from '../src/core/account.ts';
 import { NETWORKS } from '../src/core/networks.ts';
+import { bech32m } from '../src/core/encoding.ts';
 import type { VaultEntry } from '../src/core/keystore.ts';
 import { ABANDON } from './vectors.ts';
 
@@ -115,7 +116,8 @@ const midnight = new Date();
 midnight.setHours(0, 0, 0, 0);
 const nowS = Math.floor(Date.now() / 1000);
 const h64 = (n: number) => n.toString(16).padStart(64, 'b');
-const FOREIGN = 'prl1p50ltku2jjcwdxh4nzjrw98nwdswdn25qdkr2fdtw8hsq3qu9cdhscchnnm';
+// an ordinary sender: fixed bytes, not a pool's payout address
+const FOREIGN = bech32m.encode('prl', [1, ...bech32m.toWords(Uint8Array.from({ length: 32 }, (_, i) => (i * 41 + 3) & 0xff))]);
 
 const calls: string[] = [];
 globalThis.fetch = (async (input: string) => {

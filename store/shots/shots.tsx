@@ -3,6 +3,7 @@
 // indexer, so no real person's addresses or balances appear in marketing images.
 //   http://localhost:5199/store/shots/index.html?scene=home|receive|send|nodes|zh|pnl|mining|nock|promo|marquee
 //   optional &fiat=off|usd|cny|sats (prices are stubbed too — no request leaves the page)
+//   optional &pool=off|pearlhash|peryn|moved (moved = still linked to Pearlhash, but paid by Peryn)
 import { createRoot } from 'react-dom/client';
 import { App } from '../../src/ui/App.tsx';
 import '../../src/ui/styles.css';
@@ -12,6 +13,7 @@ import { NETWORKS } from '../../src/core/networks.ts';
 import { bech32m } from '../../src/core/encoding.ts';
 import { localStore, sessionStore } from '../../src/ext/platform.ts';
 import { firstNames } from '../../src/nock/index.ts';
+import { POOLS } from '../../src/ext/pool.ts';
 import lockup from '../../brand/png/lockup-white.png';
 import mark from '../../brand/svg/akoya-mark-pearl.svg';
 
@@ -27,7 +29,9 @@ const PRICES: Record<string, [number, number, number, number, number]> = {
 const net = NETWORKS.mainnet;
 const ABANDON = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
 const ZOO = 'zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong';
-const POOL = 'prl1p50ltku2jjcwdxh4nzjrw98nwdswdn25qdkr2fdtw8hsq3qu9cdhscchnnm';
+const poolMode = params.get('pool') ?? 'pearlhash';
+// who pays the wallet in the demo history: each pool's public payout address
+const POOL = (POOLS.find(p => p.id === (poolMode === 'peryn' || poolMode === 'moved' ? 'peryn' : 'pearlhash')) ?? POOLS[0]).payoutSenders[0];
 // a valid but unowned demo address (fixed bytes), so nobody's real address appears in the images
 const EXCHANGE = bech32m.encode('prl', [1, ...bech32m.toWords(Uint8Array.from({ length: 32 }, (_, i) => (i * 37 + 11) & 0xff))]);
 
@@ -39,7 +43,7 @@ const COPY: Record<string, { title: string; sub: string }> = {
   zh: { title: 'English & 简体中文', sub: 'Switch languages any time. Open source, reproducible builds, no tracking.' },
   pnl: { title: 'Know your day', sub: 'Optional fiat value and daily P&L — price moves and mining income, logged on your device.' },
   nock: { title: 'Your NOCK, same phrase', sub: 'Turn on Nockchain to see your NOCK balance and receive address — the same address the official Nockchain wallet gives you.' },
-  mining: { title: 'Your rigs, at a glance', sub: 'Link your Pearlhash account to see rigs, hashrate, pending rewards — and spot a throttling GPU.' },
+  mining: { title: 'Your rigs, at a glance', sub: 'Link your pool (Pearlhash or Peryn) to see rigs, hashrate and pending rewards — and spot a slow one.' },
 };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -72,6 +76,33 @@ function demoPool() {
       ...[1, 2, 3, 4, 5].map(k => ({ amount: 7.1 + k * 0.6, reason: `Epoch ${epoch(k + 4)} credit`, timestamp: t0 - (k + 3) * h + 60_000, coin_type: 'pearl' })),
       { amount: -28.4134, reason: 'Auto Payment', timestamp: t0 - 2.5 * h, coin_type: 'pearl' },
     ],
+  };
+}
+
+// demo Peryn account: a farm of rigs without GPU detail — one slow, one offline
+function demoPeryn(address: string) {
+  const h = 3600_000;
+  const t0 = Math.floor(Date.now() / h) * h;
+  const g = (prl: number) => String(Math.round(prl * 1e8));
+  const workers = Array.from({ length: 106 }, (_, i) => {
+    const n = i + 1;
+    const base = n === 44 ? 2.21e15 : 2.66e15 * (1 + (((n * 7) % 9) - 4) / 100);
+    const online = n !== 71;
+    return {
+      name: `rig-${String(n).padStart(3, '0')}`, kind: 'stratum', online, mode: null,
+      lastShareAt: new Date(Date.now() - (online ? 20_000 + n * 300 : 5 * h)).toISOString(),
+      hashrate1h: online ? base * (1 + (((n * 5) % 7) - 3) / 40) : 0, hashrate24h: base, span1h: 3500, span24h: 40_000,
+    };
+  });
+  const day = (k: number) => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() - k)).toISOString();
+  return {
+    address, network: 'mainnet', known: true,
+    hashrate: { lastHour: workers.reduce((a, w) => a + w.hashrate1h, 0), last24h: 2.6e17 },
+    prl: { pendingGrains: '0', pendingBlocks: 0, owedGrains: g(79.4405), confirmedGrains: g(1762.87), paidGrains: g(1683.43), minPayoutGrains: g(1) },
+    prlDays: [1480.12, 1502.4, 1491.77, 1466.05, 631.19].map((v, i, a) => ({ day: day(a.length - 1 - i), predictedGrains: g(v * 1.01), actualGrains: g(v) })),
+    workers,
+    workerCounts: { online: 105, offline: 1 },
+    payouts: [0, 1, 2, 3, 4, 5].map(k => ({ amountGrains: g(271.38 - k * 2.7), status: 'sent', at: new Date(t0 - k * 2 * h + 7 * 60_000).toISOString(), txids: [], networkFeeGrains: '53950' })),
   };
 }
 
@@ -165,7 +196,8 @@ async function setup() {
     } else if (u.includes('/api/v2/estimatefee/1')) body = { result: '0.01802650' };
     else if (u.includes('/api/v2/estimatefee/3')) body = { result: '0.00090090' };
     else if (u.includes('/api/v2/estimatefee/')) body = { result: '0.00001000' };
-    else if (u.includes('/api/account/')) body = demoPool();
+    else if (u.includes('/api/pool/address/')) body = demoPeryn(decodeURIComponent(u.split('/api/pool/address/')[1]));
+    else if (u.includes('/api/account/')) body = poolMode === 'moved' ? { connected_workers: [], balance_transactions: [] } : demoPool();
     else if (u.includes('api.coingecko.com')) {
       const cur = new URL(u).searchParams.get('vs_currencies') ?? new URL(u).searchParams.get('vs_currency') ?? 'usd';
       const [now_, open, ch, cap, btcCap] = PRICES[cur] ?? PRICES.usd;
@@ -186,7 +218,7 @@ async function setup() {
   await localStore.set('settings.v1', { language: scene === 'zh' ? 'zh-CN' : 'en', fiat });
   await localStore.set('miningSenders.v1', [POOL]);
   if (params.get('nock') !== 'off' && (scene === 'home' || scene === 'nock' || scene === 'zh')) await localStore.set('nock.v1', { [idA]: { address: NOCK_DEMO } });
-  if (params.get('pool') !== 'off' && (scene === 'home' || scene === 'mining' || scene === 'zh')) await localStore.set('pool.v1', { [idA]: { pool: 'pearlhash', address: r0, dismissed: true } });
+  if (poolMode !== 'off' && (scene === 'home' || scene === 'mining' || scene === 'zh')) await localStore.set('pool.v1', { [idA]: { pool: poolMode === 'peryn' ? 'peryn' : 'pearlhash', address: r0, dismissed: true } });
   await sessionStore.set('session.v1', { walletId: idA, name: 'Mining Rig', network: 'mainnet', mode: 'oyster', xpub: a.xpub, lastActive: Date.now() });
 }
 

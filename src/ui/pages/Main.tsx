@@ -252,8 +252,10 @@ export function MainShell({
               session={session}
               state={pool}
               payoutAddresses={ov?.payoutAddresses ?? []}
+              recentPool={ov?.recentPool ?? null}
               onOpen={() => setMiningOpen(true)}
               onChanged={() => void loadPool()}
+              onSettings={() => onSettings('pool')}
             />
             <NockCard state={nock} onOpen={() => setNockOpen(true)} />
             <div className="section-title">
@@ -297,7 +299,7 @@ export function MainShell({
       )}
       {pnlOpen && pnl.kind === 'ok' && <PnlSheet view={pnl.view} onClose={() => setPnlOpen(false)} />}
       {nockOpen && nock.cfg?.address && <NockSheet address={nock.cfg.address} ov={nock.ov} onClose={() => setNockOpen(false)} />}
-      {miningOpen && pool.stats && (
+      {miningOpen && pool.stats && pool.stats.pool === pool.cfg?.pool && (
         <MiningSheet stats={pool.stats} price={pnl.kind === 'ok' ? pnl.view : null} onClose={() => setMiningOpen(false)} onSettings={() => onSettings('pool')} />
       )}
     </div>

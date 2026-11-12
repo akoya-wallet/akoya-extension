@@ -90,6 +90,8 @@ export interface Overview {
   todayComplete: boolean;
   /** own addresses that received mining income in the loaded history, most frequent first */
   payoutAddresses: string[];
+  /** id of the known pool (ext/pool.ts) that sent the most recent payout in the loaded history */
+  recentPool: string | null;
   updatedAt: number;
 }
 
@@ -226,6 +228,8 @@ export interface PoolConfig {
   address: string | null;
   /** the home-screen suggestion was dismissed */
   dismissed: boolean;
+  /** pool id whose "your payouts now come from …" hint was dismissed */
+  switchDismissed: string | null;
   /** likely mining addresses: those that received mining income, then the first receive address */
   candidates: string[];
   /** the subset of candidates seen receiving mining income */

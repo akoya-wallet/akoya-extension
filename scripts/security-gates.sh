@@ -53,4 +53,7 @@ for i in "${!PATTERNS[@]}"; do
     echo "✔ ${NAMES[$i]}"
   fi
 done
+
+# invisible / bidi control characters (Trojan Source): by code point, across all source and config
+node scripts/check-invisible.mjs || fail=1
 exit $fail

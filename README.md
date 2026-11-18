@@ -77,7 +77,7 @@ test vectors taken from Pearl's own Go tests.
 - [PERMISSIONS.md](PERMISSIONS.md) — why each manifest permission exists
 
 Highlights: Argon2id + AES-256-GCM vault; only the xpub is kept while unlocked; the password is required
-for every send and every phrase reveal; no content scripts, no page-facing provider, strict CSP;
+for every send, phrase reveal and private-key export; no content scripts, no page-facing provider, strict CSP;
 indexer responses are validated and every path is re-derived locally; reproducible, checksummed builds
 with SLSA provenance.
 

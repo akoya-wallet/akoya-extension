@@ -7,7 +7,8 @@ import { generateMnemonic, mnemonicToSeed, validateMnemonic } from '@scure/bip39
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { HARDENED, HDKey, deriveChild, divergesAtHardenedChild, masterFromSeed, neuter, type DerivationMode } from './hd.ts';
 import { taprootAddress } from './address.ts';
-import { fromHex } from './encoding.ts';
+import { WIF } from '@scure/btc-signer';
+import { fromHex, toHex } from './encoding.ts';
 import { WalletError } from './errors.ts';
 import { ACCOUNT, PURPOSE_BIP86, bip32Versions, type PearlNetwork } from './networks.ts';
 
@@ -137,4 +138,20 @@ export function privateKeyAt(accountPriv: HDKey, branch: number, index: number):
   leaf.wipePrivateData();
   br.wipePrivateData();
   return out;
+}
+
+export interface ExportedKey {
+  /** compressed WIF with the network's version byte (what `importprivkey`-style tools take) */
+  wif: string;
+  /** raw 32-byte private key, hex */
+  hex: string;
+}
+
+/**
+ * Encodes one address's private key for the explicit export flow. This is the BIP86 *internal*
+ * key: importers derive the taproot output key (tweak) from it themselves, the same as for `tr(KEY)`.
+ */
+export function encodePrivateKey(priv: Uint8Array, net: PearlNetwork): ExportedKey {
+  if (priv.length !== 32) throw new Error('private key must be 32 bytes');
+  return { wif: WIF(net.signerNet).encode(priv), hex: toHex(priv) };
 }

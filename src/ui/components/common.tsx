@@ -24,7 +24,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** Copies non-secret text (addresses, txids). Mnemonics are never copied. */
+/** Copies text (addresses, txids; an exported private key only after the user reveals it). Recovery phrases are never copied. */
 export function useCopy() {
   const toast = useToast();
   const { t } = useI18n();

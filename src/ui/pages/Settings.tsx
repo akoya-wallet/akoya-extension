@@ -9,13 +9,13 @@ import { openTab, requestOrigin } from '../../ext/platform.ts';
 import { FIATS, FIAT_LABEL, PRICE_SOURCE } from '../../ext/price.ts';
 import type { Explorer, Fiat, IndexerStatus, Language, SessionInfo, Settings as S } from '../../ext/types.ts';
 import { LANGUAGES, useI18n } from '../../i18n/index.tsx';
-import { Btn, Kv, Notice, PasswordField, Topbar, useToast } from '../components/common.tsx';
+import { Btn, Kv, Notice, PasswordField, Topbar, useCopy, useToast } from '../components/common.tsx';
 import { PoolSettings } from './Mining.tsx';
 import { NockSettings } from './Nock.tsx';
 import { poolById } from '../../ext/pool.ts';
 import { IconChevron, IconExternal, IconEye, IconLock, IconPlus } from '../components/icons.tsx';
 
-type Sub = null | 'reveal' | 'password' | 'indexers' | 'explorers' | 'about' | 'delete' | 'rename' | 'pool' | 'nock';
+type Sub = null | 'reveal' | 'export' | 'password' | 'indexers' | 'explorers' | 'about' | 'delete' | 'rename' | 'pool' | 'nock';
 
 function Row({ label, value, onClick, danger }: { label: string; value?: string; onClick: () => void; danger?: boolean }) {
   return (
@@ -65,6 +65,7 @@ export function Settings({ session, initialSub, onBack, onLock, onDeleted, onRen
 
   const back = () => setSub(null);
   if (sub === 'reveal') return <Reveal onBack={back} onLocked={onLock} />;
+  if (sub === 'export') return <ExportKey onBack={back} onLocked={onLock} />;
   if (sub === 'password') return <ChangePassword onBack={back} />;
   if (sub === 'indexers' && settings) return <Indexers settings={settings} network={session.network} onBack={back} />;
   if (sub === 'explorers') return <Explorers network={session.network} onBack={back} />;
@@ -113,6 +114,7 @@ export function Settings({ session, initialSub, onBack, onLock, onDeleted, onRen
         <div className="list">
           <Row label={t('settings.name')} value={session.name} onClick={() => setSub('rename')} />
           <Row label={t('settings.backup')} onClick={() => setSub('reveal')} />
+          <Row label={t('settings.export_key')} onClick={() => setSub('export')} />
           <Row label={t('settings.change_password')} onClick={() => setSub('password')} />
           {session.network === 'mainnet' && <Row label={t('settings.pool')} value={poolName} onClick={() => setSub('pool')} />}
           {session.network === 'mainnet' && <Row label={t('settings.nock')} value={nockOn ? t('nock.on') : t('nock.off')} onClick={() => setSub('nock')} />}
@@ -212,6 +214,127 @@ function Reveal({ onBack, onLocked }: { onBack: () => void; onLocked: () => void
       </div>
       <div className="footer">
         <Btn className="primary" disabled={!ack.every(Boolean) || !pw} loading={busy} onClick={go}>{t('reveal.show')}</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ export one address's private key
+
+function ExportKey({ onBack, onLocked }: { onBack: () => void; onLocked: () => void }) {
+  const { t, te } = useI18n();
+  const copy = useCopy();
+  const [options, setOptions] = useState<{ address: string; path: string }[] | null>(null);
+  const [path, setPath] = useState('');
+  const [ack, setAck] = useState([false, false, false]);
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // only held while this screen is mounted
+  const [key, setKey] = useState<{ address: string; path: string; wif: string; hex: string } | null>(null);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    W.overview()
+      .then(o => {
+        // used addresses from the indexer, plus the current receive address if it has no history yet
+        const list = o.addresses.map(a => ({ address: a.address, path: a.path }));
+        if (!list.some(a => a.address === o.receiveAddress)) list.unshift({ address: o.receiveAddress, path: o.receivePath });
+        setOptions(list);
+        setPath(list[0]?.path ?? '');
+      })
+      .catch(async e => {
+        if (e instanceof W.LockedError) return onLocked();
+        // indexer down: still offer the first receive address, derived locally
+        setLoadError(te(e));
+        try {
+          const a = await W.localAddress(0, 0);
+          setOptions([a]);
+          setPath(a.path);
+        } catch (e2) {
+          if (e2 instanceof W.LockedError) onLocked();
+        }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const go = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setKey(await W.exportPrivateKey(pw, path));
+    } catch (e) {
+      if (e instanceof W.LockedError) return onLocked();
+      setError(te(e));
+    } finally {
+      setPw('');
+      setBusy(false);
+    }
+  };
+  const done = () => {
+    setKey(null);
+    onBack();
+  };
+  const branchTag = (p: string) => (p.split('/').at(-2) === '1' ? t('xkey.change_tag') : t('xkey.receive_tag'));
+
+  if (key) {
+    const field = (label: string, value: string) => (
+      <div className="field">
+        <label>{label}</label>
+        <div className="card mono" style={{ wordBreak: 'break-all', filter: shown ? 'none' : 'blur(6px)' }}>{value}</div>
+        {shown && <Btn className="sm" onClick={() => copy(value, t('xkey.copied'))}>{t('common.copy')}</Btn>}
+      </div>
+    );
+    return (
+      <div className="screen">
+        <Topbar title={t('xkey.title')} onBack={done} />
+        <div className="scroll stack">
+          <Notice kind="danger">{t('xkey.danger')}</Notice>
+          <div className="card tight">
+            <Kv k={t('xkey.address')}><span className="mono" style={{ wordBreak: 'break-all' }}>{key.address}</span></Kv>
+            <Kv k={branchTag(key.path)}><span className="mono">{key.path}</span></Kv>
+          </div>
+          {field(t('xkey.wif'), key.wif)}
+          {field(t('xkey.hex'), key.hex)}
+          {!shown && <Btn onClick={() => setShown(true)}><IconEye />{t('xkey.click')}</Btn>}
+          <Notice kind="info">{t('xkey.scope_note')}</Notice>
+        </div>
+        <div className="footer"><Btn className="primary" onClick={done}>{t('xkey.hide')}</Btn></div>
+      </div>
+    );
+  }
+
+  const items = [t('xkey.ack1'), t('xkey.ack2'), t('xkey.ack3')];
+  const ready = ack.every(Boolean) && !!pw && !!path;
+  return (
+    <div className="screen">
+      <Topbar title={t('settings.export_key')} onBack={onBack} />
+      <div className="scroll stack">
+        <Notice kind="warn">{t('xkey.warn')}</Notice>
+        <div className="field">
+          <label>{t('xkey.address')}</label>
+          {options ? (
+            <select className="select mono" value={path} onChange={e => setPath(e.target.value)}>
+              {options.map(o => (
+                <option key={o.path} value={o.path}>{`${o.address.slice(0, 12)}…${o.address.slice(-8)} · ${branchTag(o.path)} ${o.path.split('/').slice(-2).join('/')}`}</option>
+              ))}
+            </select>
+          ) : (
+            <span className="hint">{t('xkey.loading')}</span>
+          )}
+          {loadError && <span className="hint">{t('xkey.list_failed', { error: loadError })}</span>}
+        </div>
+        {items.map((text, i) => (
+          <label className="check" key={i}>
+            <input type="checkbox" checked={ack[i]} onChange={e => setAck(a => a.map((v, j) => (j === i ? e.target.checked : v)))} />
+            {text}
+          </label>
+        ))}
+        <PasswordField value={pw} onChange={setPw} onEnter={() => ready && go()} error={error} />
+      </div>
+      <div className="footer">
+        <Btn className="primary" disabled={!ready} loading={busy} onClick={go}>{t('xkey.show')}</Btn>
       </div>
     </div>
   );

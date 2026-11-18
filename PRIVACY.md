@@ -11,7 +11,9 @@ implements everything below is public at <https://github.com/akoya-wallet/akoya-
 - **We do not collect, receive, store, sell or share any of your data.** PRLFlipBTC operates no
   server that the extension talks to.
 - There is **no analytics, telemetry, advertising, tracking or crash reporting**.
-- Your recovery phrase and private keys **never leave your device**.
+- Your recovery phrase and private keys **never leave your device**. The wallet only shows them when
+  you ask (Settings → Back up recovery phrase / Export private key) and enter your password; if you
+  copy an exported private key, what happens to it from the clipboard on is up to you.
 
 ## Data stored on your device
 

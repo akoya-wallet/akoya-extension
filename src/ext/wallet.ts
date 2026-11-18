@@ -11,12 +11,15 @@ import {
   MAX_ADDRESS_INDEX,
   accountPathString,
   deriveAccount,
+  encodePrivateKey,
   newMnemonic,
   parseSeed,
   privateKeyAt,
   seedBytes,
 } from '../core/account.ts';
 import { decodeAddress, isValidAddress } from '../core/address.ts';
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { equalBytes } from '../core/encoding.ts';
 import { WalletError } from '../core/errors.ts';
 import { Blockbook, BlockbookError, parseTokenPath, type BBTx, type BBXpub } from '../core/blockbook.ts';
 import { decryptWallet, encryptWallet, passwordProblem, reencryptWallet, type VaultEntry } from '../core/keystore.ts';
@@ -1051,6 +1054,42 @@ export async function confirmSend(draftId: string, password: string): Promise<{ 
 export async function revealSecret(password: string): Promise<{ secret: string; passphrase: string }> {
   const s = await requireSession();
   return decryptWallet(await entryById(s.walletId), password);
+}
+
+/** A wallet address derived locally from the xpub (no indexer), e.g. when the indexer is down. */
+export async function localAddress(branch: number, index: number): Promise<{ address: string; path: string }> {
+  const s = await requireSession();
+  return { address: addressBook(s).get(branch, index).address, path: `${accountPathString(NETWORKS[s.network])}/${branch}/${index}` };
+}
+
+/**
+ * Explicit export flow only: the private key of ONE wallet address (receive or change branch),
+ * as WIF + hex. Needs the password every time; nothing is stored or logged, and the caller must
+ * not keep the result in long-lived state. Errors never carry key material.
+ */
+export async function exportPrivateKey(password: string, path: string): Promise<{ address: string; path: string; wif: string; hex: string }> {
+  const s = await requireSession();
+  const net = NETWORKS[s.network];
+  const prefix = accountPathString(net);
+  const p = parseTokenPath(path, prefix);
+  if (!p || (p.branch !== EXTERNAL && p.branch !== INTERNAL) || p.index > MAX_ADDRESS_INDEX) throw new WalletError('export.bad_path');
+  const entry = await entryById(s.walletId);
+  const secret = await decryptWallet(entry, password); // throws WrongPassword
+  const seed = await seedBytes(secret.secret, secret.passphrase);
+  const acct = deriveAccount(seed, net, entry.mode);
+  seed.fill(0);
+  let priv: Uint8Array | null = null;
+  try {
+    if (acct.xpub !== s.xpub) throw new WalletError('send.key_mismatch');
+    const own = addressBook(s).get(p.branch, p.index);
+    priv = privateKeyAt(acct.accountPriv, p.branch, p.index);
+    // the key must control exactly the address we show next to it
+    if (!equalBytes(secp256k1.getPublicKey(priv, true), own.pub)) throw new WalletError('send.key_mismatch');
+    return { address: own.address, path: `${prefix}/${p.branch}/${p.index}`, ...encodePrivateKey(priv, net) };
+  } finally {
+    priv?.fill(0);
+    acct.accountPriv.wipePrivateData();
+  }
 }
 
 export async function changePassword(oldPassword: string, newPassword: string) {

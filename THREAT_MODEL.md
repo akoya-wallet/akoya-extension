@@ -14,11 +14,19 @@
 | At rest | `chrome.storage.local` | Argon2id (64 MiB, t=3) → AES-256-GCM; id/network/mode bound as AAD |
 | Unlocked session | `chrome.storage.session` (memory-only, trusted contexts) | **xpub + wallet id only**, no private material |
 | Wallet list | `chrome.storage.local` | name, network, derivation mode and the **account xpub in clear** — public, cannot spend; used to list wallets and offer your other wallets as recipients. Re-derived from the seed and corrected on every unlock. |
-| Signing / backup | extension page memory | decrypted on demand, private keys zeroed after `signIdx`, HD nodes wiped |
+| Signing / backup / key export | extension page memory | decrypted on demand, private keys zeroed after `signIdx`, HD nodes wiped |
 
-The password is required for every send and every mnemonic reveal. JS strings (the mnemonic
-itself) cannot be zeroed; their lifetime is kept to a single flow and they never reach logs,
-storage, URLs or the network.
+The password is required for every send, every mnemonic reveal and every private-key export. JS
+strings (the mnemonic itself, an exported key's WIF/hex) cannot be zeroed; their lifetime is kept to
+a single flow and they never reach logs, storage, URLs or the network.
+
+**What the wallet ever reveals.** Only two secrets are ever shown, and only on explicit user request
+after the password: the recovery phrase (Settings → Back up recovery phrase; never copyable) and the
+private key of **one** chosen address (Settings → Export private key: compressed WIF + 32-byte hex,
+the BIP86 internal key of that receive/change address). Exported keys are shown blurred until
+tapped and can then be copied; the clipboard is outside the wallet's control, so a copied key is
+exposed to whatever can read it. No account-level extended private key (xprv) is ever exported. The
+exported key is checked to match the displayed address before it is shown.
 
 ## Adversaries and mitigations
 
@@ -28,8 +36,9 @@ storage, URLs or the network.
 | **Malicious dependency** (supply chain) | run code in the extension page | Exact-pinned versions + lockfile, `ignore-scripts=true`, `npm ci` in CI, `npm audit`, 8 production packages (audited `@noble/*` / `@scure/*`, zero-dependency `@paulmillr/qr`). CI: npm audit + signature/provenance verification + OSV-Scanner + lockfile/licence policy + Dependency Review + egress-blocked runners. MV3 CSP forbids remote code. |
 | **XSS / injected content** | run script in the extension origin | No content scripts, no page-facing provider, no `innerHTML`/`dangerouslySetInnerHTML`, React text rendering only, strict CSP (`script-src 'self'`, `object-src 'none'`). Indexer strings never rendered as HTML. |
 | **Device theft (browser closed)** | copy `chrome.storage.local` | Only the encrypted vault; offline Argon2id brute force is the cost. |
-| **Device theft (browser open, unlocked)** | use the open browser | Session holds no keys; sending/revealing still needs the password; auto-lock after inactivity. |
+| **Device theft (browser open, unlocked)** | use the open browser | Session holds no keys; sending, revealing the phrase and exporting a key still need the password; auto-lock after inactivity. |
 | **Phishing clone of the extension** | trick users into entering their mnemonic | The official extension ID (`jongehkghokkejeaebipgkkichfegccp`) is published in the README and on akoyawallet.app; Akoya never asks for the mnemonic except in import. |
+| **Social engineering ("support" asks for a key)** | talk the user into exporting and sending a private key | Export requires three acknowledgements (key = funds at that address, anyone asking is a scammer, paste only into a trusted wallet), the password, and a tap to unblur; only one address per export. |
 | **Price feed (CoinGecko), opt-in** | wrong price; learn the user's IP and that they hold PRL | Off by default; enabled only by an explicit user action. Requests carry only coin ids + currency (no wallet data, `credentials: 'omit'`, `no-referrer`). Responses validated (finite, positive, bounded) — a wrong price can only mislead the displayed fiat value/P&L; it never reaches fee, amount or signing logic. |
 | **Mining pool API, opt-in** (Pearlhash, Peryn) | wrong stats; learn the user's IP ↔ mining address; inject text via worker names (anyone can point a rig at an address) | Off by default; linked per wallet by an explicit user action, with a runtime permission for that single origin. Only the mining address is sent. Responses validated and bounded; strings stripped of control/bidi characters, length-capped and rendered as plain text; worker IPs dropped at parse time. Pool data is display-only — it never reaches balance, fee, amount or signing logic. |
 | **Nockchain helper (WebAssembly), opt-in** | bad crypto or a malicious build deriving a wrong NOCK address | Built from `nock/` + NockBox iris-rs at a pinned commit; CI rebuilds it and requires byte-identical output; `audit:dist` allows exactly that one module. Addresses tested against the official `nockchain-wallet` (12- and 24-word vectors). Read-only: it never signs. CSP gains `'wasm-unsafe-eval'` (WebAssembly compilation only). |
